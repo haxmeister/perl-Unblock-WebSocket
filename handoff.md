@@ -343,6 +343,11 @@ The native RSV1/framing candidate also passes the complete cross-platform
 matrix on Linux Perl 5.16, Linux latest, macOS latest, and Windows Strawberry
 Perl 5.40. Its current suite has 23 test files and 570 tests.
 
+Additional pending regressions cover illegal RSV1 on control/continuation
+frames, malformed compressed payloads, and the valid-compressed-message before
+later malformed-frame ordering path. These are prepared off-branch while the
+517-case Autobahn run is active.
+
 The portable compressor supports negotiated outgoing window sizes 8 through
 15. zlib internally promotes a deflate window of 8 to 9, so the 8-bit path uses
 Z_HUFFMAN_ONLY with a 9-bit raw stream. Because that strategy emits no LZ77

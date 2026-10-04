@@ -54,3 +54,9 @@ Revision history for Unblock-WebSocket
     - Advertise full client compression capabilities in the repository-only
       Autobahn harness and require all 517 RFC 6455 + RFC 7692 cases per
       direction.
+    - Add native compression error-path regressions for illegal RSV1 placement,
+      malformed DEFLATE, and compressed pre-error response ordering.
+    - Accept quoted RFC 7692 window-bit parameter values after unquoting and
+      validating the numeric value.
+    - Add repository-only public message-path benchmarks for Perl/native
+      framing with and without permessage-deflate.
