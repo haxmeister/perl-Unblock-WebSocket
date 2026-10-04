@@ -494,6 +494,11 @@ sub client_request {
     my $subprotocols = _checked_subprotocols(
         'client_request()', delete($option{subprotocols}) || [],
     );
+    my $pmd_offer = _checked_pmd_option(
+        'client_request()',
+        delete($option{permessage_deflate}),
+        'client',
+    );
     my $origin = delete $option{origin};
     croak 'client_request(): origin must be a scalar'
         if defined($origin) && ref($origin);
@@ -569,6 +574,9 @@ sub client_request {
         push @ws_headers,
             [ 'Sec-WebSocket-Protocol' => join(', ', @$subprotocols) ]
             if @$subprotocols;
+        push @ws_headers,
+            [ 'Sec-WebSocket-Extensions' => _format_pmd($pmd_offer) ]
+            if $pmd_offer;
         push @ws_headers, [ Origin => "$origin" ] if defined $origin;
         push @ws_headers, @extra;
 
@@ -590,6 +598,9 @@ sub client_request {
         push @ws_headers,
             [ 'Sec-WebSocket-Protocol' => join(', ', @$subprotocols) ]
             if @$subprotocols;
+        push @ws_headers,
+            [ 'Sec-WebSocket-Extensions' => _format_pmd($pmd_offer) ]
+            if $pmd_offer;
         push @ws_headers, [ Origin => "$origin" ] if defined $origin;
         push @ws_headers, @extra;
 
@@ -610,6 +621,8 @@ sub client_request {
         key                  => $key,
         offered_subprotocols => [ @$subprotocols ],
         selected_subprotocol => undef,
+        permessage_deflate_offer => $pmd_offer,
+        permessage_deflate       => undef,
     }, $class;
 
     return ($self, $request);
@@ -622,6 +635,11 @@ sub server_accept {
 
     my $supported = _checked_subprotocols(
         'server_accept()', delete($option{subprotocols}) || [],
+    );
+    my $pmd_policy = _checked_pmd_option(
+        'server_accept()',
+        delete($option{permessage_deflate}),
+        'server',
     );
     croak 'server_accept(): unknown option(s): ' . join(', ', sort keys %option)
         if %option;
@@ -699,12 +717,19 @@ sub server_accept {
     my %supported = map { $_ => 1 } @$supported;
     my ($selected) = grep { $supported{$_} } @offered;
 
+    my $pmd = _server_pmd_negotiation(
+        $request,
+        $view,
+        $pmd_policy,
+    );
+
     return bless {
         side                 => 'server',
         http_version         => "$version",
         key                  => $key,
         offered_subprotocols => \@offered,
         selected_subprotocol => $selected,
+        permessage_deflate   => $pmd,
     }, $class;
 }
 
@@ -734,6 +759,10 @@ sub server_response {
     push @headers,
         [ 'Sec-WebSocket-Protocol' => $self->{selected_subprotocol} ]
         if defined $self->{selected_subprotocol};
+    push @headers,
+        [ 'Sec-WebSocket-Extensions' =>
+            _format_pmd($self->{permessage_deflate}) ]
+        if $self->{permessage_deflate};
 
     return Uniform::HTTP::Response->new(
         status  => $status,
@@ -777,8 +806,11 @@ sub validate_client_response {
             if _header_values($response, 'Sec-WebSocket-Accept', $view);
     }
 
-    croak 'WebSocket handshake response selected an unsupported extension'
-        if _header_values($response, 'Sec-WebSocket-Extensions', $view);
+    $self->{permessage_deflate} = _client_pmd_response(
+        $response,
+        $view,
+        $self->{permessage_deflate_offer},
+    );
 
     my @protocol =
         _header_values($response, 'Sec-WebSocket-Protocol', $view);
@@ -805,6 +837,21 @@ sub subprotocol {
 sub http_version {
     my ($self) = @_;
     return $self->{http_version};
+}
+
+sub permessage_deflate {
+    my ($self) = @_;
+    return unless $self->{permessage_deflate};
+    return { %{ $self->{permessage_deflate} } };
+}
+
+sub connection_options {
+    my ($self) = @_;
+    my %option;
+    $option{permessage_deflate} =
+        { %{ $self->{permessage_deflate} } }
+        if $self->{permessage_deflate};
+    return \%option;
 }
 
 1;

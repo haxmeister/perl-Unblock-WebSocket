@@ -86,6 +86,25 @@ For example:
 The caller sends `$request` through its HTTP implementation. WebSocket does not
 own that HTTP connection.
 
+RFC 7692 compression can be offered and accepted through the same handshake:
+
+    my ($handshake, $request) =
+        Unblock::WebSocket::Handshake->client_request(
+            'wss://example.com/chat',
+            http_version       => '2',
+            permessage_deflate => 1,
+        );
+
+After the HTTP response is validated, pass the negotiated protocol options into
+the established WebSocket engine:
+
+    $handshake->validate_client_response($response);
+
+    my $ws = Unblock::WebSocket::Client->new(
+        %{ $handshake->connection_options },
+        on_message => sub { ... },
+    );
+
 ## What Unblock::WebSocket owns
 
 - WebSocket framing

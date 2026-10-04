@@ -174,7 +174,7 @@ sub next_frame {
 
     croak 'WebSocket frame uses reserved RSV bits'
         if $rsv2 || $rsv3;
-    croak 'WebSocket frame uses unnegotiated RSV1'
+    croak 'WebSocket frame uses reserved RSV bits (RSV1 not negotiated)'
         if $rsv1 && !$self->{allow_rsv1};
     croak 'WebSocket frame has reserved opcode'
         unless exists $OPCODE_TO_TYPE{$opcode};

@@ -259,10 +259,10 @@ removed files.
 
 Immediate:
 
-1. validate the portable permessage-deflate codec/RSV1 checkpoint
-2. implement RFC 7692 handshake offer/response negotiation
-3. wire negotiated parameters into Client/Server construction
-4. enable Autobahn compression sections 12 and 13
+1. validate the portable codec plus RFC 7692 negotiation on the full CI matrix
+2. update the Autobahn author harness to request negotiated permessage-deflate
+3. enable Autobahn compression sections 12 and 13
+4. fix compression conformance findings until client/server runs are clean
 5. design the native compression fast path after portable conformance is proven
 
 Then:
@@ -329,6 +329,15 @@ performance design.
 The portable zlib compressor intentionally supports negotiated outgoing window
 sizes 9 through 15. zlib cannot reliably honor an 8-bit compression window, so
 handshake negotiation must not promise an outgoing 8-bit window.
+
+Handshake negotiation now supports permessage-deflate on HTTP/1.1, HTTP/2, and
+HTTP/3. The server can negotiate all four RFC 7692 parameters and can skip an
+unsupported/malformed preferred offer in favor of a later fallback offer. The
+client currently does not advertise client_max_window_bits because doing so
+would allow the server to select 8, which the local compressor cannot promise.
+
+Handshake->connection_options returns the negotiated permessage_deflate config
+for direct use when constructing Client or Server protocol engines.
 
 
 xt/autobahn is repository-only and excluded from the CPAN distribution.

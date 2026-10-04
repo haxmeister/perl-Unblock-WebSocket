@@ -38,3 +38,7 @@ Revision history for Unblock-WebSocket
     - Keep compressed connections on the portable framing backend until native
       RSV1/compression support is implemented instead of silently degrading the
       native contract.
+    - Negotiate RFC 7692 permessage-deflate across HTTP/1.1, HTTP/2, and HTTP/3,
+      including context-takeover and window-bit parameters plus fallback offers.
+    - Export negotiated compression through connection_options() so handshake
+      state can configure Client/Server without coupling them to the HTTP engine.
