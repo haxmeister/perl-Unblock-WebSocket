@@ -336,6 +336,11 @@ distance references, the resulting stream is valid for a peer constrained to a
 256-byte (8-bit) window. A focused regression inflates this output with an
 actual WindowBits => -8 peer.
 
+Incoming negotiated window limits are enforced directionally as well: a client
+inflater uses server_max_window_bits and a server inflater uses
+client_max_window_bits. This makes the negotiated peer compressor limit an
+actual zlib constraint rather than metadata that is merely trusted.
+
 Handshake negotiation supports permessage-deflate on HTTP/1.1, HTTP/2, and
 HTTP/3. Both client and server can negotiate all four RFC 7692 parameters, and
 the server can skip an unsupported/malformed preferred offer in favor of a

@@ -190,6 +190,10 @@ connections can keep native framing and masking while the same _Deflate object
 performs the transform. The private ABI preserves its original version-1 prefix
 and appends extension-aware configure/input/send slots for optimized adapters.
 
+Incoming inflater windows are also configured directionally from the negotiated
+peer compressor limit, so server_max_window_bits constrains client-side inflate
+and client_max_window_bits constrains server-side inflate.
+
 ## Close deadlines
 
 The protocol engine owns Close state and Close frames. It does not own elapsed

@@ -86,4 +86,39 @@ ok($eight_status == Z_OK || $eight_status == Z_BUF_ERROR,
 is($eight_output, 'abcdef' x 200,
     '8-bit compressor fallback round-trips through 8-bit peer window');
 
+
+my $client_in8 = Unblock::WebSocket::_Deflate->new(
+    role => 'client',
+    config => {
+        server_max_window_bits => 8,
+    },
+    max_message_size => 4096,
+);
+is($client_in8->{in_bits}, 8,
+    'incoming server window is configured directionally for client');
+
+my $server_in9 = Unblock::WebSocket::_Deflate->new(
+    role => 'server',
+    config => {
+        client_max_window_bits => 9,
+    },
+    max_message_size => 4096,
+);
+is($server_in9->{in_bits}, 9,
+    'incoming client window is configured directionally for server');
+
+my $server_out8 = Unblock::WebSocket::_Deflate->new(
+    role => 'server',
+    config => {
+        server_max_window_bits => 8,
+    },
+    max_message_size => 4096,
+);
+my $server_wire8 = $server_out8->compress('directional window ' x 40);
+is(
+    $client_in8->decompress($server_wire8),
+    'directional window ' x 40,
+    '8-bit negotiated incoming window round-trips through configured inflater',
+);
+
 done_testing;

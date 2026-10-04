@@ -37,6 +37,12 @@ sub new {
     croak 'permessage-deflate compressor window must be between 8 and 15'
         if $out_bits < 8 || $out_bits > 15;
 
+    my $in_bits = $role eq 'client'
+        ? ($config->{server_max_window_bits} || 15)
+        : ($config->{client_max_window_bits} || 15);
+    croak 'permessage-deflate inflater window must be between 8 and 15'
+        if $in_bits < 8 || $in_bits > 15;
+
     my $out_no_context = $role eq 'client'
         ? $config->{client_no_context_takeover}
         : $config->{server_no_context_takeover};
@@ -49,6 +55,7 @@ sub new {
         config           => { %$config },
         max_message_size => 0 + $max_message_size,
         out_bits         => 0 + $out_bits,
+        in_bits          => 0 + $in_bits,
         out_no_context   => $out_no_context ? 1 : 0,
         in_no_context    => $in_no_context ? 1 : 0,
         deflater         => undef,
@@ -84,7 +91,7 @@ sub _new_inflater {
     $bufsize = 64 * 1024 if $bufsize > 64 * 1024;
 
     my ($z, $status) = Compress::Raw::Zlib::Inflate->new(
-        -WindowBits   => -15,
+        -WindowBits   => -$self->{in_bits},
         -LimitOutput  => 1,
         -Bufsize      => $bufsize,
         -AppendOutput => 0,
