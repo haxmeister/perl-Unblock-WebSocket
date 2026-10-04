@@ -157,18 +157,25 @@ See `docs/ARCHITECTURE.md` and `docs/PERFORMANCE.md`.
 
 ## Current status
 
-Initial development. The portable reference engine, native backend, and
-HTTP/1.1, HTTP/2, and HTTP/3 handshake model are implemented.
+Version 0.01 is in release preparation.
 
-The selected non-compression Autobahn RFC 6455 suite passes in both client and
-server directions with 298 OK, 0 NON-STRICT, and 3 INFORMATIONAL results out of
-301 cases. The normal suite is also green on Linux Perl 5.16, Linux latest,
-macOS latest, and Windows Strawberry Perl.
+The portable reference engine, native backend, HTTP/1.1, HTTP/2, and HTTP/3
+handshake model, and RFC 7692 permessage-deflate are implemented.
 
-RFC 7692 permessage-deflate is implemented with negotiated context/window
-parameters, bounded decompression, and native bq framing/masking when XS is
-available. Full compression Autobahn conformance and performance benchmarking
-remain before the first release is considered complete.
+The complete selected Autobahn suite passes in both client and server
+directions with 517 cases per direction:
+
+- 514 OK
+- 0 NON-STRICT
+- 0 failures
+- 3 INFORMATIONAL
+
+The normal suite is green on Linux Perl 5.16, Linux latest, macOS latest, and
+Windows Strawberry Perl.
+
+Repository-only benchmarks also exercise Perl/native framing both with and
+without permessage-deflate. See `docs/PERFORMANCE.md` for the latest same-run
+comparison.
 
 ## License
 

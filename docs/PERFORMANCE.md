@@ -89,3 +89,37 @@ masking, parsing, and boundary overhead.
 The default application payload sizes are 64 B, 256 B, 1 KiB, and 16 KiB.
 These results should be used as same-run relative measurements. Absolute
 GitHub-hosted runner numbers are not release claims.
+
+
+## Current benchmark result
+
+A GitHub-hosted Linux runner was used for one same-run comparison on
+2026-10-04. These numbers are development measurements, not hardware-independent
+release claims.
+
+    path                      bytes     messages/s payload MiB/s
+    perl                         64          21759         1.33
+    native                       64         108907         6.65
+    perl+deflate                 64          37302         2.28
+    native+deflate               64          66067         4.03
+
+    perl                        256           8118         1.98
+    native                      256         108952        26.60
+    perl+deflate                256          35374         8.64
+    native+deflate              256          59939        14.63
+
+    perl                       1024           2341         2.29
+    native                     1024         105801       103.32
+    perl+deflate               1024          26996        26.36
+    native+deflate             1024          42779        41.78
+
+    perl                      16384            153         2.40
+    native                    16384          68236      1066.19
+    perl+deflate              16384           5629        87.95
+    native+deflate            16384           6502       101.60
+
+The important comparison is same-run relative behavior. Native framing provides
+a large improvement for uncompressed traffic and remains beneficial when the
+shared permessage-deflate codec is enabled. The native-compression gain becomes
+smaller as payload size grows because DEFLATE itself accounts for more of the
+total work.

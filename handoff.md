@@ -469,6 +469,29 @@ necessary for the section 13 fuzzing server to exercise all negotiated
 parameter combinations instead of marking capability-dependent cases
 unimplemented.
 
+## Message-path benchmark result
+
+The repository-only public message-path benchmark completed successfully on
+2026-10-04 on a GitHub-hosted Linux runner.
+
+Same-run messages per second:
+
+| Payload | Perl | Native | Perl + deflate | Native + deflate |
+| ---: | ---: | ---: | ---: | ---: |
+| 64 B | 21,759 | 108,907 | 37,302 | 66,067 |
+| 256 B | 8,118 | 108,952 | 35,374 | 59,939 |
+| 1 KiB | 2,341 | 105,801 | 26,996 | 42,779 |
+| 16 KiB | 153 | 68,236 | 5,629 | 6,502 |
+
+Application payload throughput at 16 KiB was 87.95 MiB/s for the portable
+compression path and 101.60 MiB/s for native framing plus the same shared
+compression codec.
+
+These are development measurements for relative comparison, not portable
+hardware performance claims. They confirm that restoring bq framing/masking
+provides a meaningful gain without introducing a second compression
+implementation.
+
 ## Release status
 
 Not release-ready yet.
