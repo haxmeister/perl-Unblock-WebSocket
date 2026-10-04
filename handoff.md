@@ -204,10 +204,10 @@ Immediate:
 
 1. validate the newly ported RFC 6455 parser, UTF-8, protocol-error, and close
    lifecycle regressions across the full CI matrix
-2. expand malformed-frame and callback-order parity tests
-3. add broader handshake rejection/subprotocol tests
-4. add native/reference memory-lifetime regression coverage
-5. prepare Autobahn client/server harnesses
+2. validate callback-stop/Ping ordering and handshake rejection/subprotocol tests
+3. add native/reference memory-lifetime regression coverage
+4. prepare Autobahn client/server harnesses
+5. run the full non-compression Autobahn suite
 
 Then:
 
