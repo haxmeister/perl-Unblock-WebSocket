@@ -314,9 +314,16 @@ sub input {
         my $error_code = $self->{native}->_error_code;
         if ($error_code && !$self->{failed}) {
             my $error = $self->{native}->_error_string;
+            my %message = (
+                LIMIT_MAX_RECV_MSG_SIZE => 'WebSocket message exceeds configured limit',
+                BAD_UTF8                => 'WebSocket text contains invalid UTF-8',
+                RESERVED_BIT            => 'WebSocket frame uses reserved RSV bits',
+                BAD_CLOSE               => 'invalid WebSocket Close payload',
+            );
+            $error = $message{$error} || "native WebSocket error: $error";
             $self->{failed} = 1;
             $self->{sent_close} = 1;
-            $self->_invoke('on_error', "native WebSocket error: $error");
+            $self->_invoke('on_error', $error);
         }
         $self->_sync_native_output;
         return length($copy);

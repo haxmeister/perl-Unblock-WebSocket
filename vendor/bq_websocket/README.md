@@ -18,6 +18,10 @@ Linux::Event::WebSocket:
 - one-byte Close payloads are rejected;
 - control payloads larger than 125 bytes are rejected before Ping/Close side
   effects can occur;
+- the configured application message limit applies to data frames while control
+  frames retain their independent RFC 125-byte limit;
+- valid messages queued before a later malformed frame in the same input batch
+  remain receivable, preserving wire-order delivery before the protocol error;
 - every received Ping retains its own Pong response instead of keeping only the
   latest pending Pong;
 - when control messages are exposed, a validated received Close is copied before

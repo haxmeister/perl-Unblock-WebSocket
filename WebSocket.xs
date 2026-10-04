@@ -127,8 +127,7 @@ unblock_ws_native_create(uint32_t role, size_t max_message_size)
     opts.close_timeout = SIZE_MAX;
     opts.ping_response_timeout = SIZE_MAX;
     opts.limits.max_memory_used = SIZE_MAX;
-    opts.limits.max_recv_msg_size = max_message_size < 125
-        ? 125 : max_message_size;
+    opts.limits.max_recv_msg_size = max_message_size;
     opts.limits.max_recv_queue_messages = SIZE_MAX;
     opts.limits.max_recv_queue_size = SIZE_MAX;
     opts.limits.max_partial_message_parts = SIZE_MAX;

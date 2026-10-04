@@ -1965,8 +1965,11 @@ static bool ws_read_data(bqws_socket *ws, bqws_io_recv_fn recv_fn, void *user)
 			return false;
 		}
 
-		// Check the payload length and cast to `size_t`
-		if (payload_length > (uint64_t)ws->limits.max_recv_msg_size) {
+		// Data-message limits are independent of the RFC control-frame
+		// limit. Control frames may contain up to 125 octets even when the
+		// configured application message limit is smaller.
+		if (opcode < 0x8
+			&& payload_length > (uint64_t)ws->limits.max_recv_msg_size) {
 			ws_fail(ws, BQWS_ERR_LIMIT_MAX_RECV_MSG_SIZE);
 			return false;
 		}
@@ -2979,8 +2982,10 @@ const char *bqws_get_protocol(const bqws_socket *ws)
 bqws_msg *bqws_recv(bqws_socket *ws)
 {
 	bqws_assert(ws && ws->magic == BQWS_SOCKET_MAGIC);
-	if (ws->err) return NULL;
 
+	// Preserve messages that were fully received before a later frame in the
+	// same input batch failed validation. No new messages are queued after the
+	// error, but already-validated messages remain observable in wire order.
 	// Messages are re-combined in `recv_queue` if
 	// `recv_partial_messages` is disabled.
 
