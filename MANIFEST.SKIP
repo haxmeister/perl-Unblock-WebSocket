@@ -9,3 +9,4 @@
 ^handoff\.md$
 ^\.gitignore$
 ^xt/
+^bench/

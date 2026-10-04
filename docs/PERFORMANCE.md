@@ -69,3 +69,23 @@ Do not optimize by leaking Linux::Event objects into Unblock::WebSocket.
 Optimize the generic native boundary instead. If another XS transport can use
 the same facility, it belongs in Unblock. If it requires Linux::Event Stream
 state, it belongs in the Linux::Event adapter.
+
+
+## Standalone message-path benchmark
+
+The repository-only bench/message-path.pl benchmark compares the same public
+client-to-server application message path across four engine configurations:
+
+- Perl framing;
+- native bq framing;
+- Perl framing plus permessage-deflate;
+- native bq framing plus the same shared permessage-deflate codec.
+
+It measures steady-state established traffic after a short warmup. The
+compression comparison keeps the DEFLATE implementation constant so the
+difference between the compressed Perl/native cases primarily exposes framing,
+masking, parsing, and boundary overhead.
+
+The default application payload sizes are 64 B, 256 B, 1 KiB, and 16 KiB.
+These results should be used as same-run relative measurements. Absolute
+GitHub-hosted runner numbers are not release claims.
