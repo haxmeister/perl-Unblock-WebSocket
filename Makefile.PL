@@ -21,7 +21,6 @@ WriteMakefile(
         'Compress::Raw::Zlib'   => '2.017',
         'Crypt::SysRandom'      => '0.006',
         'Digest::SHA'           => 0,
-        'Encode'                => 0,
         'MIME::Base64'          => 0,
         'URI'                   => 0,
         'Uniform::HTTP'         => '0.05',
