@@ -54,6 +54,10 @@ An established server endpoint uses the same byte API:
 The role determines RFC masking direction. Clients mask frames they send;
 servers require client frames to be masked and send unmasked frames back.
 
+The native protocol engine is selected automatically when available. For
+differential testing and debugging, `backend => 'perl'` selects the portable
+reference implementation while keeping the same public API.
+
 ## HTTP handshake
 
 `Unblock::WebSocket::Handshake` constructs and validates WebSocket handshakes

@@ -486,12 +486,14 @@ CODE:
         unblock_ws_collect_event,
         &collector
     );
-    if (result != UNBLOCK_WEBSOCKET_OK) {
+    if (result != UNBLOCK_WEBSOCKET_OK
+        && unblock_ws_native_error_code(state) == (uint32_t)BQWS_OK) {
         SvREFCNT_dec((SV *)events);
-        croak("native WebSocket input failed: %s",
-            unblock_ws_native_error_string(state));
+        croak("native WebSocket input failed without protocol error");
     }
-    if (consumed != (size_t)length) {
+    if (consumed != (size_t)length
+        && unblock_ws_native_error_code(state) == (uint32_t)BQWS_OK
+        && bqws_get_state(state->ws) < BQWS_STATE_CLOSING) {
         SvREFCNT_dec((SV *)events);
         croak("native WebSocket consumed only %lu of %lu input bytes",
             (unsigned long)consumed, (unsigned long)length);
@@ -569,6 +571,17 @@ PREINIT:
 CODE:
     state = unblock_ws_from_sv(self);
     RETVAL = (UV)unblock_ws_native_error_code(state);
+OUTPUT:
+    RETVAL
+
+SV *
+_error_string(self)
+    SV *self
+PREINIT:
+    unblock_ws_native *state;
+CODE:
+    state = unblock_ws_from_sv(self);
+    RETVAL = newSVpv(unblock_ws_native_error_string(state), 0);
 OUTPUT:
     RETVAL
 

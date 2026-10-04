@@ -10,3 +10,5 @@ Revision history for Unblock-WebSocket
     - Define a private versioned native-adapter ABI for zero-copy-capable transports.
     - Add a vendored bq_websocket native engine with portable secure random masking.
     - Add Linux, macOS, and Windows CI for the native core.
+    - Use the native engine by default behind the public client/server API while
+      retaining the Perl engine as a differential reference backend.
