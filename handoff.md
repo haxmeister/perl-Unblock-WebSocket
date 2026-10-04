@@ -325,6 +325,14 @@ still owns the RFC 7692 transform and negotiated context/window state. This
 avoids maintaining two compression implementations while removing the
 pure-Perl framing/masking cost from compressed traffic.
 
+The native compression candidate has passed a source-level compatibility audit:
+new socket/fragment flags are zero-initialized by bq's existing allocation path,
+the preallocated error-message storage grows with bqws_msg_imp, compressed state
+is preserved through fragment reassembly, control frames cannot carry RSV1, and
+the original native ABI-v1 prefix remains unchanged. Cross-platform compilation
+is still gated on advancing the feature branch after the portable Autobahn
+baseline is captured.
+
 The portable codec plus RFC 7692 handshake negotiation passes the complete
 cross-platform normal matrix. The current suite has 22 test files and 549
 tests.
