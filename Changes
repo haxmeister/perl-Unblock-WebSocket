@@ -77,3 +77,5 @@ Revision history for Unblock-WebSocket
       supported Perl already provides it for the test suite.
     - Add family-style README badges, installation guidance, backpressure
       notes, and a complete established Client/Server API summary in public POD.
+    - Keep generated WebSocket.c out of future manifests and source
+      distributions.
