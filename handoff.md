@@ -200,6 +200,12 @@ event may use the portable framer. They are queued before the native
 protocol-error Close. Normal native traffic remains fully native, and arbitrary
 post-error sends remain disallowed.
 
+The native receive path now has an incremental native RFC 3629 validator.
+Validation state is carried across continuation frames and updated for each
+newly arrived unmasked payload octet, so invalid text can fail immediately even
+when the offending sequence is split across frames or socket reads. Public
+message delivery remains whole-message only; this does not expose fragments.
+
 The expanded standalone regressions found and fixed two real reference-backend
 issues:
 
@@ -222,12 +228,12 @@ removed files.
 
 Immediate:
 
-1. validate the newly ported RFC 6455 parser, UTF-8, protocol-error, and close
-   lifecycle regressions across the full CI matrix
-2. validate callback-stop/Ping ordering and handshake rejection/subprotocol tests
-3. add native/reference memory-lifetime regression coverage
-4. validate the repository-only Autobahn client/server harness
-5. run the full non-compression Autobahn suite
+1. validate incremental native UTF-8 fail-fast behavior across the full CI matrix
+2. rerun client/server Autobahn and confirm the remaining 6.4.* NON-STRICT cases
+   become strict OK
+3. audit the non-compression RFC 6455 path after a fully strict Autobahn run
+4. begin RFC 7692 permessage-deflate design and implementation
+5. add portable/native performance benchmarks
 
 Then:
 
@@ -245,8 +251,8 @@ Then:
 Server and client Autobahn results on 2026-10-04 are identical:
 
 - 301 selected RFC 6455 cases per direction
-- 287 OK
-- 11 NON-STRICT
+- current post-ordering-fix result: 294 OK
+- current post-ordering-fix result: 4 NON-STRICT
 - 3 INFORMATIONAL
 - close behavior: 298 OK / 3 INFORMATIONAL
 - zero failures
@@ -254,11 +260,11 @@ Server and client Autobahn results on 2026-10-04 are identical:
 This exactly matches the known Linux::Event::WebSocket baseline for the same
 non-compression case selection.
 
-The 11 NON-STRICT cases are 3.2, 3.3, 4.1.3, 4.1.4, 4.2.3, 4.2.4, 5.15,
-6.4.1, 6.4.2, 6.4.3, and 6.4.4. The first seven are output-ordering cases:
-a valid message precedes a malformed frame and its application response should
-be emitted before the protocol-error Close. The final four are fail-fast UTF-8
-timing cases across fragmented/chopped text input.
+The original 11 NON-STRICT cases were 3.2, 3.3, 4.1.3, 4.1.4, 4.2.3, 4.2.4,
+5.15, 6.4.1, 6.4.2, 6.4.3, and 6.4.4. The pre-error response-ordering fix
+converted the first seven to strict OK in both client and server runs. The only
+remaining NON-STRICT cases are 6.4.1 through 6.4.4, all fail-fast UTF-8 timing
+cases across fragmented/chopped text input.
 
 The first client Autobahn launch exposed a corrupted validation regexp in
 Unblock::WebSocket::_Random. The anchors had been stored as literal A/z instead

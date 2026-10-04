@@ -26,3 +26,5 @@ Revision history for Unblock-WebSocket
       the real secure-random path.
     - Preserve a valid pre-error application response before the protocol Close
       when a later frame in the same native input batch is malformed.
+    - Add incremental native RFC 3629 validation for fail-fast UTF-8 rejection
+      across fragment boundaries and chopped frame input.

@@ -80,8 +80,10 @@ for my $backend (backends()) {
         is unpack('n', substr($frame[1]{payload}, 0, 2)), 1002,
             'reserved-bit failure uses Close 1002';
 
-        ok !grep { $_->{opcode} == 10 } @frame,
-            'Ping after malformed frame does not produce Pong';
+        ok(
+            !grep({ $_->{opcode} == 10 } @frame),
+            'Ping after malformed frame does not produce Pong',
+        );
     };
 }
 

@@ -24,6 +24,7 @@ t/12-native-errors.t
 t/13-frame-rfc.t
 t/14-utf8-rfc.t
 t/15-native-memory.t
+t/16-native-utf8-stream.t
 t/20-memory-loopback.t
 t/21-fragmentation.t
 t/22-limits-errors.t

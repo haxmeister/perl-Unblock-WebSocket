@@ -302,14 +302,24 @@ typedef struct {
 } bqws_msg_queue;
 
 typedef struct {
+	uint32_t codepoint;
+	uint32_t minimum;
+	uint8_t remaining;
+	uint8_t next_min;
+	uint8_t next_max;
+} unblock_bqws_utf8_state;
+
+typedef struct {
 	bqws_msg_imp *msg;
 	size_t offset;
 	size_t header_offset;
 	size_t header_size;
 	bool finished;
 	bool masked;
+	bool validate_utf8;
 	uint32_t mask_key;
 	bqws_msg_type partial_type;
+	unblock_bqws_utf8_state utf8;
 } bqws_msg_buffer;
 
 typedef struct {
@@ -1512,59 +1522,101 @@ static bool unblock_bqws_valid_close_code(uint16_t code)
 		|| (code >= 3000 && code <= 4999);
 }
 
-static bool unblock_bqws_valid_utf8(const uint8_t *s, size_t n)
+static void unblock_bqws_utf8_reset(unblock_bqws_utf8_state *state)
 {
-	size_t i = 0;
-	while (i < n) {
-		uint8_t a = s[i++];
-		if (a <= 0x7f) continue;
-		if (a >= 0xc2 && a <= 0xdf) {
-			if (i >= n || s[i] < 0x80 || s[i] > 0xbf) return false;
-			i++;
-			continue;
+	memset(state, 0, sizeof(*state));
+	state->next_min = 0x80;
+	state->next_max = 0xbf;
+}
+
+static bool unblock_bqws_utf8_feed_byte(
+	unblock_bqws_utf8_state *state, uint8_t byte)
+{
+	if (state->remaining == 0) {
+		if (byte <= 0x7f) return true;
+
+		state->next_min = 0x80;
+		state->next_max = 0xbf;
+
+		if (byte >= 0xc2 && byte <= 0xdf) {
+			state->codepoint = (uint32_t)(byte & 0x1f);
+			state->minimum = 0x80;
+			state->remaining = 1;
+		} else if (byte >= 0xe0 && byte <= 0xef) {
+			state->codepoint = (uint32_t)(byte & 0x0f);
+			state->minimum = 0x800;
+			state->remaining = 2;
+			if (byte == 0xe0) state->next_min = 0xa0;
+			if (byte == 0xed) state->next_max = 0x9f;
+		} else if (byte >= 0xf0 && byte <= 0xf4) {
+			state->codepoint = (uint32_t)(byte & 0x07);
+			state->minimum = 0x10000;
+			state->remaining = 3;
+			if (byte == 0xf0) state->next_min = 0x90;
+			if (byte == 0xf4) state->next_max = 0x8f;
+		} else {
+			return false;
 		}
-		if (a == 0xe0) {
-			if (i + 1 >= n || s[i] < 0xa0 || s[i] > 0xbf
-				|| s[i + 1] < 0x80 || s[i + 1] > 0xbf) return false;
-			i += 2;
-			continue;
-		}
-		if ((a >= 0xe1 && a <= 0xec) || (a >= 0xee && a <= 0xef)) {
-			if (i + 1 >= n || s[i] < 0x80 || s[i] > 0xbf
-				|| s[i + 1] < 0x80 || s[i + 1] > 0xbf) return false;
-			i += 2;
-			continue;
-		}
-		if (a == 0xed) {
-			if (i + 1 >= n || s[i] < 0x80 || s[i] > 0x9f
-				|| s[i + 1] < 0x80 || s[i + 1] > 0xbf) return false;
-			i += 2;
-			continue;
-		}
-		if (a == 0xf0) {
-			if (i + 2 >= n || s[i] < 0x90 || s[i] > 0xbf
-				|| s[i + 1] < 0x80 || s[i + 1] > 0xbf
-				|| s[i + 2] < 0x80 || s[i + 2] > 0xbf) return false;
-			i += 3;
-			continue;
-		}
-		if (a >= 0xf1 && a <= 0xf3) {
-			if (i + 2 >= n || s[i] < 0x80 || s[i] > 0xbf
-				|| s[i + 1] < 0x80 || s[i + 1] > 0xbf
-				|| s[i + 2] < 0x80 || s[i + 2] > 0xbf) return false;
-			i += 3;
-			continue;
-		}
-		if (a == 0xf4) {
-			if (i + 2 >= n || s[i] < 0x80 || s[i] > 0x8f
-				|| s[i + 1] < 0x80 || s[i + 1] > 0xbf
-				|| s[i + 2] < 0x80 || s[i + 2] > 0xbf) return false;
-			i += 3;
-			continue;
-		}
+		return true;
+	}
+
+	if (byte < state->next_min || byte > state->next_max)
 		return false;
+
+	state->codepoint = (state->codepoint << 6) | (uint32_t)(byte & 0x3f);
+	state->remaining--;
+	state->next_min = 0x80;
+	state->next_max = 0xbf;
+
+	if (state->remaining == 0) {
+		if (state->codepoint < state->minimum
+			|| state->codepoint > 0x10ffff
+			|| (state->codepoint >= 0xd800
+				&& state->codepoint <= 0xdfff)) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+static uint8_t unblock_bqws_unmask_byte(
+	uint8_t byte, uint32_t mask, size_t offset)
+{
+	uint8_t mask_bytes[4];
+	memcpy(mask_bytes, &mask, sizeof(mask_bytes));
+	return (uint8_t)(byte ^ mask_bytes[offset & 3]);
+}
+
+static bool unblock_bqws_utf8_feed_payload(
+	bqws_msg_buffer *buf,
+	const char *data,
+	size_t payload_offset,
+	size_t size)
+{
+	for (size_t i = 0; i < size; i++) {
+		uint8_t byte = (uint8_t)data[i];
+		if (buf->masked) {
+			byte = unblock_bqws_unmask_byte(
+				byte, buf->mask_key, payload_offset + i);
+		}
+		if (!unblock_bqws_utf8_feed_byte(&buf->utf8, byte))
+			return false;
 	}
 	return true;
+}
+
+static bool unblock_bqws_valid_utf8(const uint8_t *s, size_t n)
+{
+	unblock_bqws_utf8_state state;
+	unblock_bqws_utf8_reset(&state);
+
+	for (size_t i = 0; i < n; i++) {
+		if (!unblock_bqws_utf8_feed_byte(&state, s[i]))
+			return false;
+	}
+
+	return state.remaining == 0;
 }
 
 static void ws_handle_control(bqws_socket *ws, bqws_msg_imp *msg)
@@ -2035,6 +2087,17 @@ static bool ws_read_data(bqws_socket *ws, bqws_io_recv_fn recv_fn, void *user)
 		}
 		bqws_assert(type != BQWS_MSG_INVALID);
 
+		// Validate text incrementally as payload bytes arrive. The UTF-8
+		// state survives continuation-frame boundaries, while control frames
+		// leave it untouched.
+		buf->validate_utf8 =
+			(type & BQWS_MSG_TYPE_MASK) == BQWS_MSG_TEXT;
+		if (opcode == 0x1) {
+			unblock_bqws_utf8_reset(&buf->utf8);
+		} else if (opcode == 0x2) {
+			unblock_bqws_utf8_reset(&buf->utf8);
+		}
+
 		// All good, allocate the message
 		bqws_msg_imp *imp = msg_alloc(ws, type, msg_size);
 		if (!imp) return false;
@@ -2049,6 +2112,12 @@ static bool ws_read_data(bqws_socket *ws, bqws_io_recv_fn recv_fn, void *user)
 			size_t to_copy = left;
 			if (to_copy > imp->msg.size) to_copy = imp->msg.size;
 			memcpy(imp->msg.data, ws->io.recv_header + offset, to_copy);
+			if (buf->validate_utf8 && to_copy > 0
+				&& !unblock_bqws_utf8_feed_payload(
+					buf, imp->msg.data, 0, to_copy)) {
+				ws_fail(ws, BQWS_ERR_BAD_UTF8);
+				return false;
+			}
 			buf->offset += to_copy;
 			offset += to_copy;
 			left -= to_copy;
@@ -2068,6 +2137,7 @@ static bool ws_read_data(bqws_socket *ws, bqws_io_recv_fn recv_fn, void *user)
 	if (msg->msg.size > 0 && buf->offset < msg->msg.size) {
 
 		size_t to_read = msg->msg.size - buf->offset;
+		size_t read_offset = buf->offset;
 		size_t num_read = recv_fn(user, ws, msg->msg.data + buf->offset, to_read, to_read);
 		if (num_read == 0) return false;
 		if (num_read == SIZE_MAX) {
@@ -2080,6 +2150,13 @@ static bool ws_read_data(bqws_socket *ws, bqws_io_recv_fn recv_fn, void *user)
 			ws->io.last_read_ts = bqws_get_timestamp();
 		}
 
+		if (buf->validate_utf8 && num_read > 0
+			&& !unblock_bqws_utf8_feed_payload(
+				buf, msg->msg.data + read_offset, read_offset, num_read)) {
+			ws_fail(ws, BQWS_ERR_BAD_UTF8);
+			return false;
+		}
+
 		buf->offset += num_read;
 		if (num_read < to_read) return false;
 	}
@@ -2089,6 +2166,20 @@ static bool ws_read_data(bqws_socket *ws, bqws_io_recv_fn recv_fn, void *user)
 	}
 
 	bqws_assert(buf->offset == msg->msg.size);
+
+	if (buf->validate_utf8) {
+		bqws_msg_type utf8_type = msg->msg.type;
+		bool logical_final =
+			(utf8_type & BQWS_MSG_PARTIAL_BIT) == 0
+			|| (utf8_type & BQWS_MSG_FINAL_BIT) != 0;
+		if (logical_final) {
+			if (buf->utf8.remaining != 0) {
+				ws_fail(ws, BQWS_ERR_BAD_UTF8);
+				return false;
+			}
+			unblock_bqws_utf8_reset(&buf->utf8);
+		}
+	}
 
 	// Peek at all incoming messages before processing
 	if (ws->peek_fn) {
@@ -2171,6 +2262,7 @@ static bool ws_read_data(bqws_socket *ws, bqws_io_recv_fn recv_fn, void *user)
 	}
 	buf->offset = 0;
 	buf->header_size = 0;
+	buf->validate_utf8 = false;
 	buf->msg = NULL;
 
 	return true;

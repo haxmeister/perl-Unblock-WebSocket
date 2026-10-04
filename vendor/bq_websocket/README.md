@@ -22,6 +22,9 @@ Linux::Event::WebSocket:
   frames retain their independent RFC 125-byte limit;
 - valid messages queued before a later malformed frame in the same input batch
   remain receivable, preserving wire-order delivery before the protocol error;
+- text payloads use incremental RFC 3629 validation while bytes arrive,
+  including across continuation frames, so invalid UTF-8 fails as soon as the
+  offending octet is knowable rather than waiting for logical message completion;
 - every received Ping retains its own Pong response instead of keeping only the
   latest pending Pong;
 - when control messages are exposed, a validated received Close is copied before
