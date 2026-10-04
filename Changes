@@ -65,4 +65,7 @@ Revision history for Unblock-WebSocket
       UNIMPLEMENTED / 3 INFORMATIONAL.
     - Accept a server client_max_window_bits response above the client's numeric
       hint and use the response value as the agreed compressor limit.
-    - Remove the obsolete Encode prerequisite after the portable UTF-8 path moved to direct Perl UTF-8 handling.
+    - Remove the obsolete Encode prerequisite after the portable UTF-8 path
+      moved to direct Perl UTF-8 handling.
+    - Document the HTTP/1.1, HTTP/2, HTTP/3, compression, FastPath, and
+      established Client/Server workflows in the public POD.
