@@ -9,6 +9,14 @@ WriteMakefile(
     AUTHOR           => 'Joshua S. Day <hax@cpan.org>',
     LICENSE          => 'mit',
     MIN_PERL_VERSION => '5.016000',
+    XS => {
+        'WebSocket.xs' => 'WebSocket.c',
+    },
+    INC => '-Iinclude',
+    LIBS => $^O eq 'MSWin32' ? ['-lbcrypt'] : [''],
+    clean => {
+        FILES => 'WebSocket.c',
+    },
     PREREQ_PM => {
         'Crypt::URandom'        => 0,
         'Digest::SHA'           => 0,
@@ -27,6 +35,7 @@ WriteMakefile(
                 Unblock::WebSocket::_Engine
                 Unblock::WebSocket::_Frame
                 Unblock::WebSocket::_Frame::Parser
+                Unblock::WebSocket::_Native
                 Unblock::WebSocket::_Random
                 Unblock::WebSocket::_UTF8
             )],

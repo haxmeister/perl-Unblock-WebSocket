@@ -4,6 +4,13 @@ use strict;
 use warnings;
 
 our $VERSION = '0.01';
+our $NATIVE_AVAILABLE = eval {
+    require XSLoader;
+    XSLoader::load(__PACKAGE__, $VERSION);
+    1;
+} ? 1 : 0;
+
+sub native_available { $NATIVE_AVAILABLE }
 
 1;
 
