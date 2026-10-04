@@ -452,11 +452,9 @@ sub _client_pmd_response {
         # behavior even when it is larger than the offered hint.
     }
 
-    # A client may always choose not to take context over even if the server
-    # ignores the corresponding offer hint.
-    $agreed->{client_no_context_takeover} = 1
-        if $offer->{client_no_context_takeover};
-
+    # client_no_context_takeover in the offer is only a hint. Established
+    # connection state reflects the parameters actually selected by the
+    # server response.
     return $agreed;
 }
 

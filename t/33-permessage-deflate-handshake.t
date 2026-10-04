@@ -428,4 +428,26 @@ for my $bad (
         'unsolicited client window rejection is explicit');
 }
 
+
+{
+    my ($client) = Unblock::WebSocket::Handshake->client_request(
+        'wss://example.test/chat',
+        http_version => '1.1',
+        key          => 'dGhlIHNhbXBsZSBub25jZQ==',
+        permessage_deflate => {
+            client_no_context_takeover => 1,
+        },
+    );
+
+    $client->validate_client_response(
+        response_for($client, 'permessage-deflate')
+    );
+
+    is_deeply(
+        $client->permessage_deflate,
+        {},
+        'ignored client_no_context_takeover hint is not treated as agreed',
+    );
+}
+
 done_testing;

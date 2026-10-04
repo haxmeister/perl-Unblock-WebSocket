@@ -400,6 +400,10 @@ HTTP/3. Both client and server can negotiate all four RFC 7692 parameters, and
 the server can skip an unsupported/malformed preferred offer in favor of a
 later fallback offer.
 
+client_no_context_takeover in a client offer is retained only as a negotiation
+hint. If the server omits it from the response, it is not inserted into the
+agreed connection options.
+
 Valueless client_max_window_bits offers are supported. A numeric
 client_max_window_bits offer is only a preference hint, so the server may
 legally reply with a larger value. The response value becomes the agreed
