@@ -376,4 +376,56 @@ for my $bad (
         "invalid quoted window value is declined: $bad");
 }
 
+
+{
+    my ($client) = Unblock::WebSocket::Handshake->client_request(
+        'wss://example.test/chat',
+        http_version       => '1.1',
+        key                => 'dGhlIHNhbXBsZSBub25jZQ==',
+        permessage_deflate => 1,
+    );
+
+    my $response = response_for(
+        $client,
+        'permessage-deflate; server_max_window_bits=10; '
+        . 'server_no_context_takeover; client_no_context_takeover',
+    );
+
+    my $ok = eval { $client->validate_client_response($response); 1 };
+    ok($ok,
+        'client accepts legal unsolicited server-side compression parameters');
+    is_deeply(
+        $client->permessage_deflate,
+        {
+            server_max_window_bits     => 10,
+            server_no_context_takeover => 1,
+            client_no_context_takeover => 1,
+        },
+        'legal unsolicited response parameters become agreed state',
+    );
+}
+
+{
+    my ($client) = Unblock::WebSocket::Handshake->client_request(
+        'wss://example.test/chat',
+        http_version       => '1.1',
+        key                => 'dGhlIHNhbXBsZSBub25jZQ==',
+        permessage_deflate => 1,
+    );
+
+    my $ok = eval {
+        $client->validate_client_response(
+            response_for(
+                $client,
+                'permessage-deflate; client_max_window_bits=10',
+            )
+        );
+        1;
+    };
+    ok(!$ok,
+        'client rejects client_max_window_bits when it was not offered');
+    like($@, qr/client_max_window_bits.*not offered/i,
+        'unsolicited client window rejection is explicit');
+}
+
 done_testing;
