@@ -1,5 +1,14 @@
 # Unblock::WebSocket
 
+[![CPAN version](https://badge.fury.io/pl/Unblock-WebSocket.svg)](https://metacpan.org/dist/Unblock-WebSocket)
+[![CPANTS Kwalitee](https://cpants.cpanauthors.org/dist/Unblock-WebSocket.svg)](https://cpants.cpanauthors.org/dist/Unblock-WebSocket)
+[![CI](https://github.com/haxmeister/perl-Unblock-WebSocket/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/haxmeister/perl-Unblock-WebSocket/actions/workflows/test.yml)
+[![Autobahn](https://github.com/haxmeister/perl-Unblock-WebSocket/actions/workflows/autobahn.yml/badge.svg?branch=main)](https://github.com/haxmeister/perl-Unblock-WebSocket/actions/workflows/autobahn.yml)
+[![License](https://img.shields.io/cpan/l/Unblock-WebSocket.svg)](https://github.com/haxmeister/perl-Unblock-WebSocket/blob/main/LICENSE)
+[![Perl](https://img.shields.io/badge/perl-5.16%2B-blue.svg)](https://www.perl.org/)
+[![WebSocket](https://img.shields.io/badge/WebSocket-RFC%206455-blue.svg)](https://www.rfc-editor.org/rfc/rfc6455)
+[![permessage--deflate](https://img.shields.io/badge/permessage--deflate-RFC%207692-blue.svg)](https://www.rfc-editor.org/rfc/rfc7692)
+
 Platform, framework, and event-loop neutral WebSocket for Perl.
 
 Unblock::WebSocket is a protocol engine. It does not open sockets, perform TLS,
@@ -26,6 +35,19 @@ Send application messages directly:
 The same engine is intended to work with Linux::Event, IO::Async, AnyEvent,
 Mojolicious, blocking sockets, in-memory transports, HTTP/2 streams, HTTP/3
 streams, and other ordered byte transports.
+
+## Installation
+
+From CPAN:
+
+    cpanm Unblock::WebSocket
+
+Unblock::WebSocket 0.01 requires Perl 5.16 or newer.
+
+The main external protocol dependencies are:
+
+    Uniform::HTTP        0.05+
+    Compress::Raw::Zlib  2.017+
 
 ## Client and server
 
@@ -57,6 +79,32 @@ servers require client frames to be masked and send unmasked frames back.
 The native protocol engine is selected automatically when available. For
 differential testing and debugging, `backend => 'perl'` selects the portable
 reference implementation while keeping the same public API.
+
+## Backpressure and callbacks
+
+Client and Server use the same established-connection callbacks:
+
+    on_message
+    on_ping
+    on_pong
+    on_close
+    on_error
+    on_drain
+
+Ping frames are answered with Pong automatically. Close frames are validated
+and echoed according to the WebSocket protocol.
+
+The default output watermarks are:
+
+    high water: 65536 bytes
+    low water:  32768 bytes
+
+send_text(), send_binary(), and ping() still accept the message when the high
+water mark is reached. A false return means the producer should pause until
+on_drain runs.
+
+The default maximum application message size is 16 MiB and applies after
+permessage-deflate decompression.
 
 ## HTTP handshake
 
