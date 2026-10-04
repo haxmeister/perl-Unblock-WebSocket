@@ -79,3 +79,10 @@ jobs:
         run: |
           MAKE=$(perl -MConfig -e 'print $Config{make}')
           "$MAKE" distcheck
+
+      - name: Test distribution tree
+        if: matrix.os == 'ubuntu-latest' && matrix.perl == 'latest'
+        shell: bash
+        run: |
+          MAKE=$(perl -MConfig -e 'print $Config{make}')
+          "$MAKE" disttest
