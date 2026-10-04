@@ -1,0 +1,10 @@
+Revision history for Unblock-WebSocket
+
+0.01  unreleased
+
+    - Begin standalone platform- and event-loop-neutral WebSocket engine.
+    - Add portable client and server byte-stream protocol engines.
+    - Add framing, masking, fragmentation, UTF-8, Ping/Pong, and Close handling.
+    - Add Uniform::HTTP handshake support for HTTP/1.1 Upgrade and HTTP/2 or
+      HTTP/3 Extended CONNECT.
+    - Define a private native-adapter performance path for future bq integration.

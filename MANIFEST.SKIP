@@ -1,0 +1,9 @@
+^\.git/
+^\.github/
+^blib/
+^Makefile$
+^Makefile\.old$
+^MYMETA\.
+^pm_to_blib$
+^Unblock-WebSocket-.*\.tar\.gz$
+^docs/
