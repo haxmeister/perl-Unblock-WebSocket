@@ -159,7 +159,9 @@ behavior.
 
 Extension negotiation and frame transforms belong inside Unblock::WebSocket.
 The first required extension is RFC 7692 permessage-deflate. It must be added
-without exposing WebSocket frame objects as the application API.
+without exposing WebSocket frame objects as the application API. Compression
+state is per connection and directional; negotiated context-takeover and window
+limits must remain protocol state inside Unblock::WebSocket.
 
 ## Close deadlines
 

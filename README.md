@@ -132,11 +132,16 @@ See `docs/ARCHITECTURE.md` and `docs/PERFORMANCE.md`.
 
 ## Current status
 
-Initial development. The portable reference engine and HTTP/1.1, HTTP/2, and
-HTTP/3 handshake model are implemented. A vendored bq_websocket native backend
-and versioned native adapter ABI are being validated across Linux, macOS, and
-Windows. Full Autobahn validation, public-engine/native-backend integration, and
-permessage-deflate remain before the first release is considered complete.
+Initial development. The portable reference engine, native backend, and
+HTTP/1.1, HTTP/2, and HTTP/3 handshake model are implemented.
+
+The selected non-compression Autobahn RFC 6455 suite passes in both client and
+server directions with 298 OK, 0 NON-STRICT, and 3 INFORMATIONAL results out of
+301 cases. The normal suite is also green on Linux Perl 5.16, Linux latest,
+macOS latest, and Windows Strawberry Perl.
+
+RFC 7692 permessage-deflate, compression conformance, and performance
+benchmarking remain before the first release is considered complete.
 
 ## License
 

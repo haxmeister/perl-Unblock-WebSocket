@@ -171,6 +171,8 @@ The complete CI matrix is green on:
 - macOS, latest Perl
 - Windows Strawberry Perl 5.40
 
+The current normal suite contains 18 test files and 487 tests.
+
 The POD workflow now checks only modules that contain POD, so private internal
 modules without POD no longer create false CI failures.
 
@@ -228,11 +230,11 @@ removed files.
 
 Immediate:
 
-1. validate incremental native UTF-8 fail-fast behavior across the full CI matrix
-2. rerun client/server Autobahn and confirm the remaining 6.4.* NON-STRICT cases
-   become strict OK
-3. audit the non-compression RFC 6455 path after a fully strict Autobahn run
-4. begin RFC 7692 permessage-deflate design and implementation
+1. audit the now-strict non-compression RFC 6455 path and freeze its regression
+   baseline
+2. design RFC 7692 permessage-deflate negotiation and compression state
+3. implement permessage-deflate without exposing frames as public objects
+4. enable Autobahn compression sections 12 and 13
 5. add portable/native performance benchmarks
 
 Then:
@@ -251,8 +253,8 @@ Then:
 Server and client Autobahn results on 2026-10-04 are identical:
 
 - 301 selected RFC 6455 cases per direction
-- current post-ordering-fix result: 294 OK
-- current post-ordering-fix result: 4 NON-STRICT
+- final non-compression result: 298 OK
+- final non-compression result: 0 NON-STRICT
 - 3 INFORMATIONAL
 - close behavior: 298 OK / 3 INFORMATIONAL
 - zero failures
@@ -262,9 +264,9 @@ non-compression case selection.
 
 The original 11 NON-STRICT cases were 3.2, 3.3, 4.1.3, 4.1.4, 4.2.3, 4.2.4,
 5.15, 6.4.1, 6.4.2, 6.4.3, and 6.4.4. The pre-error response-ordering fix
-converted the first seven to strict OK in both client and server runs. The only
-remaining NON-STRICT cases are 6.4.1 through 6.4.4, all fail-fast UTF-8 timing
-cases across fragmented/chopped text input.
+converted the first seven to strict OK. Incremental native RFC 3629 validation
+then converted 6.4.1 through 6.4.4 to strict OK. There are now zero NON-STRICT
+results in the selected non-compression suite in either direction.
 
 The first client Autobahn launch exposed a corrupted validation regexp in
 Unblock::WebSocket::_Random. The anchors had been stored as literal A/z instead

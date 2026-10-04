@@ -28,3 +28,5 @@ Revision history for Unblock-WebSocket
       when a later frame in the same native input batch is malformed.
     - Add incremental native RFC 3629 validation for fail-fast UTF-8 rejection
       across fragment boundaries and chopped frame input.
+    - Reach strict selected Autobahn RFC 6455 conformance in both directions:
+      298 OK, 0 NON-STRICT, 3 INFORMATIONAL out of 301 cases.
