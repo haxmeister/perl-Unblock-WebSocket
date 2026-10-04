@@ -67,7 +67,11 @@ jobs:
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          find lib -name '*.pm' -print0 | xargs -0 -n1 podchecker
+          while IFS= read -r -d '' file; do
+            if grep -q '^=' "$file"; then
+              podchecker "$file"
+            fi
+          done < <(find lib -name '*.pm' -print0)
 
       - name: Check distribution manifest
         if: matrix.os == 'ubuntu-latest' && matrix.perl == 'latest'

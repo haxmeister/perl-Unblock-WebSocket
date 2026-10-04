@@ -6,3 +6,4 @@
 ^MYMETA\.
 ^pm_to_blib$
 ^Unblock-WebSocket-.*\.tar\.gz$
+^handoff\.md$
