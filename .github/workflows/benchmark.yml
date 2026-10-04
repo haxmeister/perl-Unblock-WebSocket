@@ -1,0 +1,37 @@
+name: benchmark message path
+
+on:
+  push:
+    branches:
+      - feature/benchmark-run
+    paths:
+      - 'bench/**'
+      - '.github/workflows/benchmark.yml'
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Perl
+        uses: shogo82148/actions-setup-perl@v1
+        with:
+          perl-version: '5.44.0'
+
+      - name: Install dependencies
+        run: |
+          cpanm --notest Uniform::HTTP@0.05 URI
+          cpanm --notest --installdeps .
+
+      - name: Build distribution
+        run: |
+          perl Makefile.PL
+          make
+
+      - name: Run message-path benchmark
+        env:
+          BENCH_SECONDS: '1.5'
+        run: |
+          perl -Mblib bench/message-path.pl
