@@ -176,6 +176,7 @@ modules without POD no longer create false CI failures.
 
 Current coverage includes:
 
+- Rejected Close-frame memory lifetime remains at native baseline
 - framing and masking
 - partial input
 - 16-bit payload length

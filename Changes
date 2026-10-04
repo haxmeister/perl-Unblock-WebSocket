@@ -18,3 +18,4 @@ Revision history for Unblock-WebSocket
     - Preserve RFC 3629 Unicode noncharacters in the portable UTF-8 path while
       still rejecting surrogates and values above U+10FFFF.
     - Correct invalid UTF-8 Close reasons to use Close 1007 in the Perl backend.
+    - Add native rejected-Close memory-lifetime regressions for ownership safety.
