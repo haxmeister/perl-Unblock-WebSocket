@@ -494,10 +494,19 @@ implementation.
 
 ## Release status
 
-Not release-ready yet.
-
 Version remains 0.01.
 
-The first release should not be considered complete until native portability,
-conformance, documentation, distribution contents, and the intended extension
-story have all been audited.
+The release candidate is functionally complete.
+
+The exact release candidate passes the complete normal CI matrix on Linux Perl
+5.16, Linux latest, macOS latest, and Windows Strawberry Perl. Linux latest also
+passes POD checks, distcheck, and disttest against the extracted distribution
+tree. The extracted tree runs 24 test files and 599 tests successfully.
+
+A prior native-compression checkpoint already passed the complete 517-case
+Autobahn suite in both directions with 514 OK, 0 NON-STRICT, 0 failures, and 3
+INFORMATIONAL results per direction.
+
+Final release readiness is now gated only on the in-progress Autobahn reruns
+against the hardened/final candidate. No known feature, portability,
+documentation, packaging, or dependency blocker remains.
