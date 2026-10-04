@@ -79,3 +79,5 @@ Revision history for Unblock-WebSocket
       notes, and a complete established Client/Server API summary in public POD.
     - Keep generated WebSocket.c out of future manifests and source
       distributions.
+    - Complete the 0.01 release audit with four-platform CI, POD, distcheck,
+      disttest, full 517-case Autobahn conformance, and benchmark validation.
