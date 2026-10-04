@@ -11,7 +11,8 @@ use Uniform::HTTP::FastPath 0.05 ();
 use Unblock::WebSocket::_Random ();
 
 my $GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
-my $TOKEN_RE = qr/\A[!#\$%&'*+\-.^_`|~0-9A-Za-z]+\z/;
+my $TOKEN_BODY = qr/[!#\$%&'*+\-.^_`|~0-9A-Za-z]+/;
+my $TOKEN_RE = qr/\A$TOKEN_BODY\z/;
 
 sub _trim {
     my ($value) = @_;
@@ -85,6 +86,369 @@ sub _has_token {
         return 1 if lc($token) eq lc($wanted);
     }
     return 0;
+}
+
+sub _split_extension_list {
+    my ($where, $value, $delimiter) = @_;
+    my @part;
+    my $start = 0;
+    my $quoted = 0;
+    my $escaped = 0;
+
+    for my $pos (0 .. length($value) - 1) {
+        my $char = substr($value, $pos, 1);
+
+        if ($escaped) {
+            $escaped = 0;
+            next;
+        }
+        if ($quoted && $char eq '\\') {
+            $escaped = 1;
+            next;
+        }
+        if ($char eq '"') {
+            $quoted = !$quoted;
+            next;
+        }
+        next unless !$quoted && $char eq $delimiter;
+
+        push @part, substr($value, $start, $pos - $start);
+        $start = $pos + 1;
+    }
+
+    croak "$where contains an unterminated quoted string"
+        if $quoted || $escaped;
+    push @part, substr($value, $start);
+    return @part;
+}
+
+sub _quoted_extension_value {
+    my ($where, $value) = @_;
+    croak "$where contains an invalid quoted parameter"
+        unless length($value) >= 2
+            && substr($value, 0, 1) eq '"'
+            && substr($value, -1, 1) eq '"';
+
+    my $inside = substr($value, 1, length($value) - 2);
+    my $out = '';
+    my $escaped = 0;
+
+    for my $char (split //, $inside) {
+        if ($escaped) {
+            my $ord = ord($char);
+            croak "$where contains an invalid quoted escape"
+                if $ord > 0x7f;
+            $out .= $char;
+            $escaped = 0;
+            next;
+        }
+
+        if ($char eq '\\') {
+            $escaped = 1;
+            next;
+        }
+
+        my $ord = ord($char);
+        croak "$where contains an invalid quoted parameter byte"
+            if ($ord < 0x20 && $char ne "\t") || $ord == 0x7f;
+        $out .= $char;
+    }
+
+    croak "$where contains an incomplete quoted escape" if $escaped;
+    return $out;
+}
+
+sub _extension_elements {
+    my ($message, $view) = @_;
+    my @element;
+
+    for my $header (
+        _header_values($message, 'Sec-WebSocket-Extensions', $view)
+    ) {
+        for my $raw (
+            _split_extension_list(
+                'Sec-WebSocket-Extensions',
+                $header,
+                ',',
+            )
+        ) {
+            $raw = _trim($raw);
+            croak 'Sec-WebSocket-Extensions contains an empty extension'
+                if $raw eq '';
+
+            my @part = _split_extension_list(
+                'Sec-WebSocket-Extensions',
+                $raw,
+                ';',
+            );
+            my $name = _trim(shift @part);
+            croak "Sec-WebSocket-Extensions contains invalid extension '$name'"
+                unless $name =~ $TOKEN_RE;
+
+            my @parameter;
+            for my $raw_parameter (@part) {
+                $raw_parameter = _trim($raw_parameter);
+                croak 'Sec-WebSocket-Extensions contains an empty parameter'
+                    if $raw_parameter eq '';
+
+                my ($parameter_name, $tail) =
+                    $raw_parameter =~ /\A($TOKEN_BODY)(.*)\z/;
+                croak "Sec-WebSocket-Extensions contains invalid parameter '$raw_parameter'"
+                    unless defined $parameter_name;
+
+                $tail = _trim($tail);
+                my ($parameter_value, $quoted);
+                if ($tail ne '') {
+                    croak "Sec-WebSocket-Extensions parameter '$parameter_name' is malformed"
+                        unless substr($tail, 0, 1) eq '=';
+                    $tail = _trim(substr($tail, 1));
+                    croak "Sec-WebSocket-Extensions parameter '$parameter_name' has no value"
+                        if $tail eq '';
+
+                    if (substr($tail, 0, 1) eq '"') {
+                        $parameter_value = _quoted_extension_value(
+                            "Sec-WebSocket-Extensions parameter '$parameter_name'",
+                            $tail,
+                        );
+                        $quoted = 1;
+                    }
+                    else {
+                        croak "Sec-WebSocket-Extensions parameter '$parameter_name' has invalid value"
+                            unless $tail =~ $TOKEN_RE;
+                        $parameter_value = $tail;
+                        $quoted = 0;
+                    }
+                }
+
+                push @parameter, {
+                    name   => lc($parameter_name),
+                    value  => $parameter_value,
+                    quoted => $quoted ? 1 : 0,
+                };
+            }
+
+            push @element, {
+                name       => lc($name),
+                parameters => \@parameter,
+            };
+        }
+    }
+
+    return @element;
+}
+
+sub _pmd_parameters {
+    my ($where, $element, $response) = @_;
+    my %parameter;
+
+    for my $item (@{ $element->{parameters} }) {
+        my $name = $item->{name};
+        croak "$where contains duplicate permessage-deflate parameter '$name'"
+            if exists $parameter{$name};
+
+        croak "$where contains unknown permessage-deflate parameter '$name'"
+            unless $name eq 'server_no_context_takeover'
+                || $name eq 'client_no_context_takeover'
+                || $name eq 'server_max_window_bits'
+                || $name eq 'client_max_window_bits';
+
+        if ($name eq 'server_no_context_takeover'
+            || $name eq 'client_no_context_takeover') {
+            croak "$where parameter '$name' must not have a value"
+                if defined $item->{value};
+            $parameter{$name} = 1;
+            next;
+        }
+
+        if (!defined $item->{value}) {
+            croak "$where parameter '$name' requires a value"
+                if $response || $name eq 'server_max_window_bits';
+            $parameter{$name} = undef;
+            next;
+        }
+
+        croak "$where parameter '$name' must not use a quoted value"
+            if $item->{quoted};
+        my $bits = $item->{value};
+        croak "$where parameter '$name' has invalid window bits"
+            unless $bits =~ /\A(?:8|9|1[0-5])\z/;
+        $parameter{$name} = 0 + $bits;
+    }
+
+    return \%parameter;
+}
+
+sub _checked_pmd_option {
+    my ($where, $value, $side) = @_;
+    return unless defined($value) && $value;
+
+    return {} if !ref($value) && "$value" eq '1';
+    croak "$where: permessage_deflate must be true or a hash reference"
+        unless ref($value) eq 'HASH';
+
+    my %option = %$value;
+    my %out;
+
+    for my $name (qw(
+        client_no_context_takeover
+        server_no_context_takeover
+    )) {
+        next unless exists $option{$name};
+        my $flag = delete $option{$name};
+        croak "$where: permessage_deflate $name must be zero or one"
+            if ref($flag) || "$flag" !~ /\A[01]\z/;
+        $out{$name} = $flag ? 1 : 0;
+    }
+
+    if ($side eq 'client' && exists $option{client_max_window_bits}) {
+        croak "$where: client_max_window_bits is not advertised yet because "
+            . 'portable zlib cannot guarantee an RFC 7692 8-bit compressor window';
+    }
+
+    for my $name (qw(server_max_window_bits client_max_window_bits)) {
+        next unless exists $option{$name};
+        my $bits = delete $option{$name};
+        my $minimum = $name eq 'server_max_window_bits' ? 9 : 8;
+        croak "$where: permessage_deflate $name must be an integer "
+            . "from $minimum through 15"
+            unless defined($bits) && !ref($bits)
+                && "$bits" =~ /\A[0-9]+\z/
+                && $bits >= $minimum && $bits <= 15;
+        $out{$name} = 0 + $bits;
+    }
+
+    croak "$where: unknown permessage_deflate option(s): "
+        . join(', ', sort keys %option)
+        if %option;
+
+    return \%out;
+}
+
+sub _format_pmd {
+    my ($parameter) = @_;
+    my @part = ('permessage-deflate');
+
+    push @part, 'server_no_context_takeover'
+        if $parameter->{server_no_context_takeover};
+    push @part, 'client_no_context_takeover'
+        if $parameter->{client_no_context_takeover};
+    push @part, 'server_max_window_bits='
+        . $parameter->{server_max_window_bits}
+        if exists $parameter->{server_max_window_bits};
+    push @part, 'client_max_window_bits='
+        . $parameter->{client_max_window_bits}
+        if exists $parameter->{client_max_window_bits};
+
+    return join('; ', @part);
+}
+
+sub _server_pmd_negotiation {
+    my ($request, $view, $policy) = @_;
+    return unless $policy;
+
+    for my $element (_extension_elements($request, $view)) {
+        next unless $element->{name} eq 'permessage-deflate';
+
+        my $offer = eval {
+            _pmd_parameters(
+                'WebSocket permessage-deflate offer',
+                $element,
+                0,
+            );
+        };
+        next unless $offer;
+
+        my %agreed;
+
+        if ($offer->{server_no_context_takeover}
+            || $policy->{server_no_context_takeover}) {
+            $agreed{server_no_context_takeover} = 1;
+        }
+
+        if (exists $offer->{server_max_window_bits}) {
+            my $offered = $offer->{server_max_window_bits};
+            next if !defined($offered) || $offered < 9;
+
+            my $bits = exists($policy->{server_max_window_bits})
+                ? $policy->{server_max_window_bits}
+                : $offered;
+            $bits = $offered if $bits > $offered;
+            next if $bits < 9;
+            $agreed{server_max_window_bits} = $bits;
+        }
+        elsif (exists $policy->{server_max_window_bits}) {
+            $agreed{server_max_window_bits} =
+                $policy->{server_max_window_bits};
+        }
+
+        if ($policy->{client_no_context_takeover}) {
+            $agreed{client_no_context_takeover} = 1;
+        }
+
+        if (exists($policy->{client_max_window_bits})
+            && exists($offer->{client_max_window_bits})) {
+            my $bits = $policy->{client_max_window_bits};
+            if (defined($offer->{client_max_window_bits})
+                && $bits > $offer->{client_max_window_bits}) {
+                $bits = $offer->{client_max_window_bits};
+            }
+            $agreed{client_max_window_bits} = $bits;
+        }
+
+        return \%agreed;
+    }
+
+    return;
+}
+
+sub _client_pmd_response {
+    my ($response, $view, $offer) = @_;
+    my @extension = _extension_elements($response, $view);
+
+    if (!$offer) {
+        croak 'WebSocket handshake response selected an unsupported extension'
+            if @extension;
+        return;
+    }
+
+    return unless @extension;
+
+    croak 'WebSocket handshake response selected multiple extensions'
+        if @extension != 1;
+    croak 'WebSocket handshake response selected an unsupported extension'
+        unless $extension[0]{name} eq 'permessage-deflate';
+
+    my $agreed = _pmd_parameters(
+        'WebSocket permessage-deflate response',
+        $extension[0],
+        1,
+    );
+
+    croak 'WebSocket permessage-deflate response omitted required '
+        . 'server_no_context_takeover'
+        if $offer->{server_no_context_takeover}
+            && !$agreed->{server_no_context_takeover};
+
+    if (exists $offer->{server_max_window_bits}) {
+        croak 'WebSocket permessage-deflate response omitted required '
+            . 'server_max_window_bits'
+            unless exists $agreed->{server_max_window_bits};
+        croak 'WebSocket permessage-deflate response increased '
+            . 'server_max_window_bits'
+            if $agreed->{server_max_window_bits}
+                > $offer->{server_max_window_bits};
+    }
+
+    croak 'WebSocket permessage-deflate response included '
+        . 'client_max_window_bits that was not offered'
+        if exists $agreed->{client_max_window_bits};
+
+    # A client may always choose not to take context over even if the server
+    # ignores the corresponding offer hint.
+    $agreed->{client_no_context_takeover} = 1
+        if $offer->{client_no_context_takeover};
+
+    return $agreed;
 }
 
 sub _checked_subprotocols {
