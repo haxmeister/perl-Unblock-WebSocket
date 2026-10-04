@@ -1,6 +1,7 @@
 use strict;
 use warnings;
 use Test::More;
+use Compress::Raw::Zlib 2.017 qw(Z_BUF_ERROR Z_OK);
 
 use Unblock::WebSocket::_Deflate;
 
@@ -58,18 +59,31 @@ ok(!$ok, 'decompressed message limit rejects compression bomb');
 like($@, qr/exceeds configured limit/i,
     'compression bomb reports configured message limit');
 
-$ok = eval {
-    Unblock::WebSocket::_Deflate->new(
-        role => 'client',
-        config => {
-            client_max_window_bits => 8,
-        },
-        max_message_size => 1024,
-    );
-    1;
-};
-ok(!$ok, 'unsupported 8-bit compressor window is rejected');
-like($@, qr/window must be between 9 and 15/i,
-    '8-bit compressor window reports portable zlib limitation');
+my $eight_bit = Unblock::WebSocket::_Deflate->new(
+    role => 'client',
+    config => {
+        client_max_window_bits => 8,
+    },
+    max_message_size => 4096,
+);
+my $eight_wire = $eight_bit->compress('abcdef' x 200);
+
+my ($inflate8, $inflate_status) = Compress::Raw::Zlib::Inflate->new(
+    -WindowBits => -8,
+);
+ok($inflate8 && $inflate_status == Z_OK,
+    'peer 8-bit raw inflater initializes');
+
+my $eight_input = $eight_wire . "\x00\x00\xff\xff";
+my $eight_output = '';
+my $eight_status = $inflate8->inflate(
+    $eight_input,
+    $eight_output,
+    1,
+);
+ok($eight_status == Z_OK || $eight_status == Z_BUF_ERROR,
+    '8-bit constrained peer accepts compressed stream');
+is($eight_output, 'abcdef' x 200,
+    '8-bit compressor fallback round-trips through 8-bit peer window');
 
 done_testing;

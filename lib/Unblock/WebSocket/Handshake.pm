@@ -300,20 +300,14 @@ sub _checked_pmd_option {
         $out{$name} = $flag ? 1 : 0;
     }
 
-    if ($side eq 'client' && exists $option{client_max_window_bits}) {
-        croak "$where: client_max_window_bits is not advertised yet because "
-            . 'portable zlib cannot guarantee an RFC 7692 8-bit compressor window';
-    }
-
     for my $name (qw(server_max_window_bits client_max_window_bits)) {
         next unless exists $option{$name};
         my $bits = delete $option{$name};
-        my $minimum = $name eq 'server_max_window_bits' ? 9 : 8;
         croak "$where: permessage_deflate $name must be an integer "
-            . "from $minimum through 15"
+            . 'from 8 through 15'
             unless defined($bits) && !ref($bits)
                 && "$bits" =~ /\A[0-9]+\z/
-                && $bits >= $minimum && $bits <= 15;
+                && $bits >= 8 && $bits <= 15;
         $out{$name} = 0 + $bits;
     }
 
@@ -367,13 +361,12 @@ sub _server_pmd_negotiation {
 
         if (exists $offer->{server_max_window_bits}) {
             my $offered = $offer->{server_max_window_bits};
-            next if !defined($offered) || $offered < 9;
+            next unless defined $offered;
 
             my $bits = exists($policy->{server_max_window_bits})
                 ? $policy->{server_max_window_bits}
                 : $offered;
             $bits = $offered if $bits > $offered;
-            next if $bits < 9;
             $agreed{server_max_window_bits} = $bits;
         }
         elsif (exists $policy->{server_max_window_bits}) {
@@ -439,9 +432,23 @@ sub _client_pmd_response {
                 > $offer->{server_max_window_bits};
     }
 
-    croak 'WebSocket permessage-deflate response included '
-        . 'client_max_window_bits that was not offered'
-        if exists $agreed->{client_max_window_bits};
+    if (exists $agreed->{client_max_window_bits}) {
+        croak 'WebSocket permessage-deflate response included '
+            . 'client_max_window_bits that was not offered'
+            unless exists $offer->{client_max_window_bits};
+        croak 'WebSocket permessage-deflate response increased '
+            . 'client_max_window_bits'
+            if defined($offer->{client_max_window_bits})
+                && $agreed->{client_max_window_bits}
+                    > $offer->{client_max_window_bits};
+    }
+    elsif (exists $offer->{client_max_window_bits}
+        && defined $offer->{client_max_window_bits}) {
+        # The offer value is a hint. If the server does not constrain the
+        # client, keeping the locally preferred smaller window is still valid.
+        $agreed->{client_max_window_bits} =
+            $offer->{client_max_window_bits};
+    }
 
     # A client may always choose not to take context over even if the server
     # ignores the corresponding offer hint.

@@ -252,21 +252,36 @@ for my $version ('1.1', '2', '3') {
 }
 
 {
-    my $ok = eval {
+    my ($client, $request) =
         Unblock::WebSocket::Handshake->client_request(
             'wss://example.test/chat',
             http_version => '1.1',
             key          => 'dGhlIHNhbXBsZSBub25jZQ==',
             permessage_deflate => {
-                client_max_window_bits => 15,
+                client_max_window_bits => 8,
             },
         );
-        1;
-    };
-    ok(!$ok,
-        'client does not advertise client_max_window_bits before 8-bit support');
-    like($@, qr/8-bit compressor window/i,
-        'client window limitation explains zlib constraint');
+
+    is_deeply(
+        [ header_values($request, 'Sec-WebSocket-Extensions') ],
+        [ 'permessage-deflate; client_max_window_bits=8' ],
+        'client can advertise an 8-bit compressor window',
+    );
+
+    my $server = Unblock::WebSocket::Handshake->server_accept(
+        $request,
+        permessage_deflate => {
+            client_max_window_bits => 8,
+        },
+    );
+    my $response = $server->server_response;
+    $client->validate_client_response($response);
+
+    is_deeply(
+        $client->permessage_deflate,
+        { client_max_window_bits => 8 },
+        'client accepts negotiated 8-bit outgoing compressor window',
+    );
 }
 
 done_testing;

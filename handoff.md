@@ -330,15 +330,17 @@ The portable codec plus RFC 7692 handshake negotiation passes the complete
 cross-platform normal matrix. The current suite has 22 test files and 549
 tests.
 
-The portable zlib compressor intentionally supports negotiated outgoing window
-sizes 9 through 15. zlib cannot reliably honor an 8-bit compression window, so
-handshake negotiation must not promise an outgoing 8-bit window.
+The portable compressor supports negotiated outgoing window sizes 8 through
+15. zlib internally promotes a deflate window of 8 to 9, so the 8-bit path uses
+Z_HUFFMAN_ONLY with a 9-bit raw stream. Because that strategy emits no LZ77
+distance references, the resulting stream is valid for a peer constrained to a
+256-byte (8-bit) window. A focused regression inflates this output with an
+actual WindowBits => -8 peer.
 
-Handshake negotiation now supports permessage-deflate on HTTP/1.1, HTTP/2, and
-HTTP/3. The server can negotiate all four RFC 7692 parameters and can skip an
-unsupported/malformed preferred offer in favor of a later fallback offer. The
-client currently does not advertise client_max_window_bits because doing so
-would allow the server to select 8, which the local compressor cannot promise.
+Handshake negotiation supports permessage-deflate on HTTP/1.1, HTTP/2, and
+HTTP/3. Both client and server can negotiate all four RFC 7692 parameters, and
+the server can skip an unsupported/malformed preferred offer in favor of a
+later fallback offer.
 
 Handshake->connection_options returns the negotiated permessage_deflate config
 for direct use when constructing Client or Server protocol engines.

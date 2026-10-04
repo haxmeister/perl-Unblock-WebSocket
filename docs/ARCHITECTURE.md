@@ -177,7 +177,9 @@ state is per connection and directional; negotiated context-takeover and window
 limits must remain protocol state inside Unblock::WebSocket.
 
 The correctness-first implementation uses Compress::Raw::Zlib with raw DEFLATE
-streams and bounded decompression output. While that portable implementation is
+streams and bounded decompression output. An 8-bit negotiated compressor window
+uses Z_HUFFMAN_ONLY over a 9-bit zlib raw stream; with no LZ77 distance
+references the emitted stream remains valid for the RFC 7692 8-bit limit. While that portable implementation is
 being proven, compressed connections use the Perl framing backend. This is not
 the final performance path: native bq framing must later gain explicit RSV1 and
 compression support so negotiated compression can use the private native ABI

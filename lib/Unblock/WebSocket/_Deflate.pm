@@ -5,6 +5,7 @@ use warnings;
 use Carp qw(croak);
 use Compress::Raw::Zlib 2.017 qw(
     Z_BUF_ERROR
+    Z_HUFFMAN_ONLY
     Z_OK
     Z_SYNC_FLUSH
 );
@@ -33,8 +34,8 @@ sub new {
     my $out_bits = $role eq 'client'
         ? ($config->{client_max_window_bits} || 15)
         : ($config->{server_max_window_bits} || 15);
-    croak 'permessage-deflate compressor window must be between 9 and 15'
-        if $out_bits < 9 || $out_bits > 15;
+    croak 'permessage-deflate compressor window must be between 8 and 15'
+        if $out_bits < 8 || $out_bits > 15;
 
     my $out_no_context = $role eq 'client'
         ? $config->{client_no_context_takeover}
@@ -57,10 +58,21 @@ sub new {
 
 sub _new_deflater {
     my ($self) = @_;
-    my ($z, $status) = Compress::Raw::Zlib::Deflate->new(
+    my %option = (
         -WindowBits   => -$self->{out_bits},
         -AppendOutput => 1,
     );
+
+    # zlib promotes an 8-bit deflate window to 9 internally. For an RFC 7692
+    # window of 8, use a 9-bit raw stream with Huffman-only compression. That
+    # emits no LZ77 distance references, so the stream is valid for a peer
+    # constrained to a 256-byte window.
+    if ($self->{out_bits} == 8) {
+        $option{-WindowBits} = -9;
+        $option{-Strategy} = Z_HUFFMAN_ONLY;
+    }
+
+    my ($z, $status) = Compress::Raw::Zlib::Deflate->new(%option);
     croak "permessage-deflate deflater initialization failed: $status"
         unless $z && $status == Z_OK;
     return $z;
