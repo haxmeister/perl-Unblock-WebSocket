@@ -6,7 +6,7 @@ Last updated: 2026-10-04
 
 Repository: haxmeister/perl-Unblock-WebSocket
 
-Development branch: feature/native-core
+Development branch: feature/permessage-deflate
 
 Main currently contains the initial portable protocol core. Native backend work
 is being developed and tested on feature/native-core before it is merged.
@@ -51,8 +51,19 @@ direction.
 
 ## Handshake boundary
 
-Unblock::WebSocket::Handshake uses Uniform::HTTP 0.04 request and response
+Unblock::WebSocket::Handshake uses Uniform::HTTP 0.05 request and response
 objects.
+
+For exact canonical Uniform objects, handshake validation uses
+Uniform::HTTP::FastPath ABI 1 as a read-only bulk view. This removes repeated
+header/method accessor dispatch during the opening handshake. Subclasses and
+adapters are deliberately kept on the portable Uniform method contract.
+
+WebSocket does not use FastPath trusted construction for requests or responses.
+Handshake construction happens once per connection, so bypassing normal Uniform
+validation there is not worth the additional trust boundary. FastPath also does
+not enter the native WebSocket frame ABI; established-frame processing remains
+independent of HTTP and Uniform.
 
 Supported bootstrap forms:
 
@@ -67,7 +78,28 @@ chosen HTTP implementation.
 WebSocket frames remain private wire-protocol machinery. They do not belong in
 Uniform.
 
-## Reference backend
+## Uniform::HTTP 0.05 FastPath review
+
+Uniform::HTTP 0.05 FastPath is useful to Unblock::WebSocket, but only at the
+HTTP handshake boundary.
+
+Decision:
+
+- require Uniform::HTTP 0.05;
+- use FastPath::view() for read-only inspection of exact canonical Request and
+  Response objects;
+- retain the existing portable accessor path for subclasses and adapters;
+- keep normal Uniform constructors for WebSocket-generated requests/responses;
+- do not use request_from_validated() or response_from_validated() here;
+- do not couple the native WebSocket frame ABI to Uniform::HTTP.
+
+This is intentionally narrower than HTTP1/HTTP2/HTTP3 FastPath use. Those
+engines process Uniform messages continuously and benefit substantially from
+bulk/trusted construction. WebSocket performs HTTP work only once when a
+connection opens, so FastPath can remove avoidable method dispatch without
+adding a second trusted construction boundary or changing established-message
+performance.
+
 
 The Perl frame/parser engine remains available as:
 

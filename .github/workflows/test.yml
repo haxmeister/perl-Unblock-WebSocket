@@ -38,14 +38,14 @@ jobs:
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          cpanm --notest Uniform::HTTP@0.04 URI
+          cpanm --notest Uniform::HTTP@0.05 URI
           cpanm --notest --installdeps .
 
       - name: Install dependencies on Windows
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          cpanm --notest Uniform::HTTP@0.04
+          cpanm --notest Uniform::HTTP@0.05
           cpanm --notest --installdeps .
 
       - name: Build and test

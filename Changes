@@ -30,3 +30,6 @@ Revision history for Unblock-WebSocket
       across fragment boundaries and chopped frame input.
     - Reach strict selected Autobahn RFC 6455 conformance in both directions:
       298 OK, 0 NON-STRICT, 3 INFORMATIONAL out of 301 cases.
+    - Require Uniform::HTTP 0.05 and use its FastPath view for read-only
+      inspection of exact canonical handshake messages, with the portable
+      Uniform contract retained for subclasses and adapters.

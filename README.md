@@ -61,7 +61,12 @@ reference implementation while keeping the same public API.
 ## HTTP handshake
 
 `Unblock::WebSocket::Handshake` constructs and validates WebSocket handshakes
-using `Uniform::HTTP` objects.
+using `Uniform::HTTP 0.05` objects.
+
+Exact canonical Uniform request and response objects use the Uniform FastPath
+view for read-only handshake inspection. Uniform subclasses and adapters keep
+using the normal portable message methods, so FastPath is an optimization and
+not an API requirement.
 
 It supports:
 

@@ -35,6 +35,7 @@ t/26-callback-order.t
 t/27-error-output-order.t
 t/30-handshake.t
 t/31-handshake-rejections.t
+t/32-uniform-fastpath.t
 vendor/bq_websocket/LICENSE
 vendor/bq_websocket/README.md
 vendor/bq_websocket/bq_websocket.c

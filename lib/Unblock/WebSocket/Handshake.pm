@@ -6,6 +6,7 @@ use Carp qw(croak);
 use Digest::SHA qw(sha1);
 use MIME::Base64 qw(decode_base64 encode_base64);
 use URI ();
+use Uniform::HTTP::FastPath 0.05 ();
 
 use Unblock::WebSocket::_Random ();
 
@@ -19,9 +20,31 @@ sub _trim {
     return $value;
 }
 
+sub _fast_view {
+    my ($message) = @_;
+    return unless Uniform::HTTP::FastPath::can_view($message);
+    return Uniform::HTTP::FastPath::view($message);
+}
+
+sub _message_value {
+    my ($message, $view, $slot, $method) = @_;
+    return $view ? $view->[$slot] : $message->$method();
+}
+
 sub _header_values {
-    my ($message, $wanted) = @_;
+    my ($message, $wanted, $view) = @_;
     my @value;
+
+    if ($view) {
+        my $headers =
+            $view->[Uniform::HTTP::FastPath::SLOT_HEADERS()];
+        for my $field (@$headers) {
+            push @value, $field->[1]
+                if lc($field->[0]) eq lc($wanted);
+        }
+        return @value;
+    }
+
     for my $index (0 .. $message->header_count - 1) {
         my $name = $message->header_name($index);
         push @value, $message->header_value($index)
@@ -46,16 +69,19 @@ sub _tokens {
 }
 
 sub _singleton {
-    my ($message, $name) = @_;
-    my @value = _header_values($message, $name);
+    my ($message, $name, $view) = @_;
+    my @value = _header_values($message, $name, $view);
     croak "WebSocket handshake requires $name" unless @value;
     croak "WebSocket handshake contains duplicate $name" if @value > 1;
     return _trim($value[0]);
 }
 
 sub _has_token {
-    my ($message, $name, $wanted) = @_;
-    for my $token (_tokens($name, _header_values($message, $name))) {
+    my ($message, $name, $wanted, $view) = @_;
+    for my $token (_tokens(
+        $name,
+        _header_values($message, $name, $view),
+    )) {
         return 1 if lc($token) eq lc($wanted);
     }
     return 0;
@@ -236,35 +262,61 @@ sub server_accept {
     croak 'server_accept(): unknown option(s): ' . join(', ', sort keys %option)
         if %option;
 
-    my $version = $request->version;
+    my $view = _fast_view($request);
+    my $version = _message_value(
+        $request,
+        $view,
+        Uniform::HTTP::FastPath::SLOT_VERSION(),
+        'version',
+    );
     croak 'server_accept(): request version must be known'
         unless defined $version;
 
     my $key;
     if ($version eq '1.1') {
+        my $method = _message_value(
+            $request,
+            $view,
+            Uniform::HTTP::FastPath::SLOT_METHOD(),
+            'method',
+        );
         croak 'WebSocket HTTP/1.1 handshake method must be GET'
-            unless $request->method eq 'GET';
+            unless $method eq 'GET';
         croak 'WebSocket handshake Upgrade header must contain websocket'
-            unless _has_token($request, 'Upgrade', 'websocket');
+            unless _has_token($request, 'Upgrade', 'websocket', $view);
         croak 'WebSocket handshake Connection header must contain Upgrade'
-            unless _has_token($request, 'Connection', 'Upgrade');
-        my $ws_version = _singleton($request, 'Sec-WebSocket-Version');
+            unless _has_token($request, 'Connection', 'Upgrade', $view);
+        my $ws_version =
+            _singleton($request, 'Sec-WebSocket-Version', $view);
         croak 'WebSocket handshake Sec-WebSocket-Version must be 13'
             unless $ws_version eq '13';
-        $key = _singleton($request, 'Sec-WebSocket-Key');
+        $key = _singleton($request, 'Sec-WebSocket-Key', $view);
         croak 'WebSocket handshake contains invalid Sec-WebSocket-Key'
             unless _valid_key($key);
     }
     elsif ($version eq '2' || $version eq '3') {
+        my $method = _message_value(
+            $request,
+            $view,
+            Uniform::HTTP::FastPath::SLOT_METHOD(),
+            'method',
+        );
+        my $protocol = _message_value(
+            $request,
+            $view,
+            Uniform::HTTP::FastPath::SLOT_PROTOCOL(),
+            'protocol',
+        );
         croak 'WebSocket Extended CONNECT method must be CONNECT'
-            unless $request->method eq 'CONNECT';
+            unless $method eq 'CONNECT';
         croak 'WebSocket Extended CONNECT :protocol must be websocket'
-            unless defined($request->protocol) && $request->protocol eq 'websocket';
-        my $ws_version = _singleton($request, 'Sec-WebSocket-Version');
+            unless defined($protocol) && $protocol eq 'websocket';
+        my $ws_version =
+            _singleton($request, 'Sec-WebSocket-Version', $view);
         croak 'WebSocket handshake Sec-WebSocket-Version must be 13'
             unless $ws_version eq '13';
         croak 'WebSocket HTTP/2 and HTTP/3 handshake must not contain Sec-WebSocket-Key'
-            if _header_values($request, 'Sec-WebSocket-Key');
+            if _header_values($request, 'Sec-WebSocket-Key', $view);
     }
     else {
         croak "WebSocket handshake does not support HTTP version $version";
@@ -272,7 +324,7 @@ sub server_accept {
 
     my @offered = _tokens(
         'Sec-WebSocket-Protocol',
-        _header_values($request, 'Sec-WebSocket-Protocol'),
+        _header_values($request, 'Sec-WebSocket-Protocol', $view),
     );
     my %seen;
     for my $token (@offered) {
@@ -334,28 +386,38 @@ sub validate_client_response {
     croak 'validate_client_response(): response object is required'
         unless defined($response) && ref($response);
 
+    my $view = _fast_view($response);
+    my $status = _message_value(
+        $response,
+        $view,
+        Uniform::HTTP::FastPath::SLOT_STATUS(),
+        'status',
+    );
+
     if ($self->{http_version} eq '1.1') {
         croak 'WebSocket handshake response status must be 101'
-            unless $response->status == 101;
+            unless $status == 101;
         croak 'WebSocket handshake response Upgrade header must contain websocket'
-            unless _has_token($response, 'Upgrade', 'websocket');
+            unless _has_token($response, 'Upgrade', 'websocket', $view);
         croak 'WebSocket handshake response Connection header must contain Upgrade'
-            unless _has_token($response, 'Connection', 'Upgrade');
-        my $accept = _singleton($response, 'Sec-WebSocket-Accept');
+            unless _has_token($response, 'Connection', 'Upgrade', $view);
+        my $accept =
+            _singleton($response, 'Sec-WebSocket-Accept', $view);
         croak 'WebSocket handshake response has invalid Sec-WebSocket-Accept'
             unless $accept eq __PACKAGE__->accept_key($self->{key});
     }
     else {
         croak 'WebSocket Extended CONNECT response status must be 200'
-            unless $response->status == 200;
+            unless $status == 200;
         croak 'WebSocket HTTP/2 and HTTP/3 response must not contain Sec-WebSocket-Accept'
-            if _header_values($response, 'Sec-WebSocket-Accept');
+            if _header_values($response, 'Sec-WebSocket-Accept', $view);
     }
 
     croak 'WebSocket handshake response selected an unsupported extension'
-        if _header_values($response, 'Sec-WebSocket-Extensions');
+        if _header_values($response, 'Sec-WebSocket-Extensions', $view);
 
-    my @protocol = _header_values($response, 'Sec-WebSocket-Protocol');
+    my @protocol =
+        _header_values($response, 'Sec-WebSocket-Protocol', $view);
     croak 'WebSocket handshake response contains duplicate Sec-WebSocket-Protocol'
         if @protocol > 1;
     if (@protocol) {

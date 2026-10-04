@@ -37,7 +37,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          cpanm --notest Uniform::HTTP@0.04 URI
+          cpanm --notest Uniform::HTTP@0.05 URI
           cpanm --notest --installdeps .
 
       - name: Build distribution
@@ -115,7 +115,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          cpanm --notest Uniform::HTTP@0.04 URI
+          cpanm --notest Uniform::HTTP@0.05 URI
           cpanm --notest --installdeps .
 
       - name: Build distribution
