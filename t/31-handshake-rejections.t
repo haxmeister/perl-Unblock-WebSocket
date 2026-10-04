@@ -60,7 +60,7 @@ dies_like(
             key => 'dGhlIHNhbXBsZSBub25jZQ==',
         );
     },
-    qr/key is only valid for HTTP/1.1/i,
+    qr{key is only valid for HTTP/1\.1}i,
     'HTTP/2 client rejects Sec-WebSocket-Key option',
 );
 
