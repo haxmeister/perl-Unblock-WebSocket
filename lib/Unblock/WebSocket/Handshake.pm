@@ -447,13 +447,22 @@ sub _client_pmd_response {
             . 'client_max_window_bits that was not offered'
             unless exists $offer->{client_max_window_bits};
 
-        # A value in the client's offer is a preference hint, not a maximum
-        # on the server's response. The response value is the agreed limit.
+        # A numeric value in the client's offer is a hint, so a larger value
+        # in the server response is valid. The client nevertheless promised
+        # that it would not use a compressor window larger than its hint.
+        # connection_options() carries effective endpoint behavior, so retain
+        # the smaller local hint when it is stricter than the response.
+        if (defined($offer->{client_max_window_bits})
+            && $offer->{client_max_window_bits}
+                < $agreed->{client_max_window_bits}) {
+            $agreed->{client_max_window_bits} =
+                $offer->{client_max_window_bits};
+        }
     }
     elsif (exists $offer->{client_max_window_bits}
         && defined $offer->{client_max_window_bits}) {
-        # The offer value is a hint. If the server does not constrain the
-        # client, keeping the locally preferred smaller window is still valid.
+        # The server may omit the parameter entirely. The numeric offer still
+        # commits this client to its hinted smaller compressor window.
         $agreed->{client_max_window_bits} =
             $offer->{client_max_window_bits};
     }

@@ -336,8 +336,8 @@ for my $version ('1.1', '2', '3') {
         'client accepts client_max_window_bits response above offer hint');
     is_deeply(
         $client->permessage_deflate,
-        { client_max_window_bits => 12 },
-        'response value, not client hint, defines agreed compressor limit',
+        { client_max_window_bits => 8 },
+        'client keeps stricter local window hint despite larger response',
     );
 }
 
