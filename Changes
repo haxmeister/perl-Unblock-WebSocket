@@ -19,3 +19,6 @@ Revision history for Unblock-WebSocket
       still rejecting surrogates and values above U+10FFFF.
     - Correct invalid UTF-8 Close reasons to use Close 1007 in the Perl backend.
     - Add native rejected-Close memory-lifetime regressions for ownership safety.
+    - Add a repository-only Autobahn client/server author harness using blocking
+      socket adapters around the public byte API.
+    - Keep repository infrastructure and author tests out of the CPAN manifest.

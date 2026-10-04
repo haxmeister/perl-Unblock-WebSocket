@@ -219,7 +219,7 @@ Immediate:
    lifecycle regressions across the full CI matrix
 2. validate callback-stop/Ping ordering and handshake rejection/subprotocol tests
 3. add native/reference memory-lifetime regression coverage
-4. prepare Autobahn client/server harnesses
+4. validate the repository-only Autobahn client/server harness
 5. run the full non-compression Autobahn suite
 
 Then:
@@ -232,6 +232,19 @@ Then:
 11. add performance benchmarks for reference/native public paths
 12. later build the Linux::Event native adapter and compare against the old
     Linux::Event::WebSocket baseline
+
+## Autobahn author harness
+
+xt/autobahn is repository-only and excluded from the CPAN distribution.
+
+It uses IO::Socket::INET only as author-test transport glue. The test adapter
+performs HTTP/1.1 bootstrap through Unblock::WebSocket::Handshake and then
+drives the public Client/Server byte API. It does not introduce a runtime
+transport or event-loop dependency.
+
+The GitHub Autobahn workflow runs the external crossbario/autobahn-testsuite
+Docker image for both server and client conformance. Sections 12 and 13 remain
+excluded until RFC 7692 permessage-deflate exists.
 
 ## Release status
 

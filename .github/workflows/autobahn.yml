@@ -1,0 +1,170 @@
+name: Autobahn WebSocket conformance
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'WebSocket.xs'
+      - 'Makefile.PL'
+      - 'vendor/bq_websocket/**'
+      - 'lib/Unblock/WebSocket/**'
+      - 'xt/autobahn/**'
+      - '.github/workflows/autobahn.yml'
+  pull_request:
+    paths:
+      - 'WebSocket.xs'
+      - 'Makefile.PL'
+      - 'vendor/bq_websocket/**'
+      - 'lib/Unblock/WebSocket/**'
+      - 'xt/autobahn/**'
+      - '.github/workflows/autobahn.yml'
+
+concurrency:
+  group: autobahn-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  server-conformance:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Perl
+        uses: shogo82148/actions-setup-perl@v1
+        with:
+          perl-version: '5.44.0'
+
+      - name: Install dependencies
+        run: |
+          cpanm --notest Uniform::HTTP@0.04 URI
+          cpanm --notest --installdeps .
+
+      - name: Build distribution
+        run: |
+          perl Makefile.PL
+          make
+          echo "PERL5LIB=$PWD/blib/lib:$PWD/blib/arch:${PERL5LIB:-}" >> "$GITHUB_ENV"
+
+      - name: Start Unblock test server
+        run: |
+          perl xt/autobahn/echo-server.pl > /tmp/autobahn-testee.log 2>&1 &
+          echo $! > /tmp/autobahn-testee.pid
+          for attempt in {1..100}; do
+            if grep -q '^READY ' /tmp/autobahn-testee.log; then
+              cat /tmp/autobahn-testee.log
+              exit 0
+            fi
+            if ! kill -0 "$(cat /tmp/autobahn-testee.pid)" 2>/dev/null; then
+              cat /tmp/autobahn-testee.log
+              exit 1
+            fi
+            sleep 0.1
+          done
+          cat /tmp/autobahn-testee.log
+          exit 1
+
+      - name: Run Autobahn fuzzing client
+        shell: bash
+        run: |
+          mkdir -p xt/autobahn/reports
+          docker_status=0
+          docker run --rm --network host             -v "$PWD/xt/autobahn:/config:ro"             -v "$PWD/xt/autobahn/reports:/reports"             crossbario/autobahn-testsuite             wstest --mode fuzzingclient --spec /config/fuzzingclient.json             || docker_status=$?
+
+          report_status=0
+          if [ -f xt/autobahn/reports/servers/index.json ]; then
+            perl xt/autobahn/check-report.pl               xt/autobahn/reports/servers/index.json               || report_status=$?
+          else
+            echo "Autobahn did not produce server index.json" >&2
+            report_status=1
+          fi
+
+          if [ "$docker_status" -ne 0 ] || [ "$report_status" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Show server log
+        if: always()
+        run: cat /tmp/autobahn-testee.log || true
+
+      - name: Stop test server
+        if: always()
+        run: |
+          if [ -f /tmp/autobahn-testee.pid ]; then
+            kill "$(cat /tmp/autobahn-testee.pid)" 2>/dev/null || true
+          fi
+
+      - name: Upload server report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: autobahn-server-report
+          path: xt/autobahn/reports/servers
+          if-no-files-found: warn
+
+  client-conformance:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Perl
+        uses: shogo82148/actions-setup-perl@v1
+        with:
+          perl-version: '5.44.0'
+
+      - name: Install dependencies
+        run: |
+          cpanm --notest Uniform::HTTP@0.04 URI
+          cpanm --notest --installdeps .
+
+      - name: Build distribution
+        run: |
+          perl Makefile.PL
+          make
+          echo "PERL5LIB=$PWD/blib/lib:$PWD/blib/arch:${PERL5LIB:-}" >> "$GITHUB_ENV"
+
+      - name: Start Autobahn fuzzing server
+        run: |
+          mkdir -p xt/autobahn/reports
+          docker pull crossbario/autobahn-testsuite
+          docker run --rm --network host             --name autobahn-fuzzingserver             -v "$PWD/xt/autobahn:/config:ro"             -v "$PWD/xt/autobahn/reports:/reports"             crossbario/autobahn-testsuite             wstest --mode fuzzingserver --spec /config/fuzzingserver.json             > /tmp/autobahn-fuzzingserver.log 2>&1 &
+          echo $! > /tmp/autobahn-fuzzingserver.pid
+
+          for attempt in {1..100}; do
+            if (echo > /dev/tcp/127.0.0.1/9001) >/dev/null 2>&1; then
+              exit 0
+            fi
+            if ! kill -0 "$(cat /tmp/autobahn-fuzzingserver.pid)" 2>/dev/null; then
+              cat /tmp/autobahn-fuzzingserver.log
+              exit 1
+            fi
+            sleep 0.1
+          done
+
+          cat /tmp/autobahn-fuzzingserver.log
+          exit 1
+
+      - name: Run Unblock client
+        run: perl xt/autobahn/client-driver.pl
+
+      - name: Check client report
+        run: |
+          test -f xt/autobahn/reports/clients/index.json
+          perl xt/autobahn/check-report.pl             xt/autobahn/reports/clients/index.json
+
+      - name: Show fuzzing-server log
+        if: always()
+        run: cat /tmp/autobahn-fuzzingserver.log || true
+
+      - name: Stop fuzzing server
+        if: always()
+        run: docker stop autobahn-fuzzingserver 2>/dev/null || true
+
+      - name: Upload client report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: autobahn-client-report
+          path: xt/autobahn/reports/clients
+          if-no-files-found: warn
