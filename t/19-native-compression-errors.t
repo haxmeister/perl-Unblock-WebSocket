@@ -255,4 +255,57 @@ sub masked_frame {
     );
 }
 
+
+{
+    my @message;
+    my $server = Unblock::WebSocket::Server->new(
+        backend            => 'native',
+        permessage_deflate => {},
+        on_message => sub {
+            my ($ws, $payload, $type) = @_;
+            push @message, [ $payload, $type ];
+        },
+    );
+
+    my $codec = Unblock::WebSocket::_Deflate->new(
+        role             => 'client',
+        config           => {},
+        max_message_size => 4096,
+    );
+
+    my $first_payload = 'history-message-' x 20;
+    my $second_payload = 'history-message-' x 20;
+    my $first_compressed = $codec->compress($first_payload);
+    my $second_compressed = $codec->compress($second_payload);
+
+    my $first = masked_frame(
+        opcode  => 2,
+        payload => $first_compressed,
+        rsv1    => 1,
+    );
+    my $plain = masked_frame(
+        opcode   => 2,
+        payload  => 'plain-between',
+        mask_key => "\x05\x06\x07\x08",
+    );
+    my $second = masked_frame(
+        opcode   => 2,
+        payload  => $second_compressed,
+        rsv1     => 1,
+        mask_key => "\x09\x0a\x0b\x0c",
+    );
+
+    $server->input($first . $plain . $second);
+
+    is_deeply(
+        \@message,
+        [
+            [ $first_payload, 'binary' ],
+            [ 'plain-between', 'binary' ],
+            [ $second_payload, 'binary' ],
+        ],
+        'uncompressed interleaving does not disturb compression history',
+    );
+}
+
 done_testing;
