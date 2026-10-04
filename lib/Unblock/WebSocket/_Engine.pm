@@ -145,13 +145,8 @@ sub _sync_native_output {
     return $self->_queue_wire($wire);
 }
 
-sub _queue_frame {
+sub _queue_portable_frame {
     my ($self, $opcode, $payload, %option) = @_;
-    if ($self->{backend} eq 'native') {
-        croak 'native frame options are internal-only' if %option;
-        $self->{native}->queue_message($opcode, $payload);
-        return $self->_sync_native_output;
-    }
     my %mask;
     if ($self->{role} eq 'client') {
         my $key = $self->{random_bytes}
@@ -169,6 +164,30 @@ sub _queue_frame {
         %option,
     );
     return $self->_queue_wire($wire);
+}
+
+sub _queue_frame {
+    my ($self, $opcode, $payload, %option) = @_;
+    if ($self->{backend} eq 'native') {
+        croak 'native frame options are internal-only' if %option;
+
+        # A native input batch can contain a complete valid message followed by
+        # a malformed frame. bq has already entered error/closing state by the
+        # time Perl receives the earlier valid event, so its normal send API
+        # refuses the application response. Preserve wire ordering by encoding
+        # only responses generated while delivering those retained pre-error
+        # events through the portable framer. This is an exceptional error
+        # path; ordinary native traffic remains fully native.
+        if ($self->{native_pre_error_event}
+            && $self->{native}->_error_code) {
+            return $self->_queue_portable_frame($opcode, $payload);
+        }
+
+        $self->{native}->queue_message($opcode, $payload);
+        return $self->_sync_native_output;
+    }
+
+    return $self->_queue_portable_frame($opcode, $payload, %option);
 }
 
 sub send_text {
@@ -308,10 +327,13 @@ sub input {
             unless utf8::downgrade($copy, 1);
 
         my $events = $self->{native}->feed($copy);
-        local $self->{driving} = 1;
-        $self->_handle_native_events($events);
-
         my $error_code = $self->{native}->_error_code;
+        {
+            local $self->{driving} = 1;
+            local $self->{native_pre_error_event} = $error_code ? 1 : 0;
+            $self->_handle_native_events($events);
+        }
+
         if ($error_code && !$self->{failed}) {
             my $error = $self->{native}->_error_string;
             my %message = (

@@ -193,6 +193,13 @@ Current coverage includes:
 
 ## Regression findings
 
+Pre-error response ordering is now treated explicitly: if the native parser
+has already detected a later malformed frame but returns an earlier complete
+valid event, only responses generated while delivering that retained pre-error
+event may use the portable framer. They are queued before the native
+protocol-error Close. Normal native traffic remains fully native, and arbitrary
+post-error sends remain disallowed.
+
 The expanded standalone regressions found and fixed two real reference-backend
 issues:
 
@@ -235,9 +242,9 @@ Then:
 
 ## Autobahn results
 
-Server Autobahn result on 2026-10-04:
+Server and client Autobahn results on 2026-10-04 are identical:
 
-- 301 selected RFC 6455 cases
+- 301 selected RFC 6455 cases per direction
 - 287 OK
 - 11 NON-STRICT
 - 3 INFORMATIONAL
@@ -247,11 +254,17 @@ Server Autobahn result on 2026-10-04:
 This exactly matches the known Linux::Event::WebSocket baseline for the same
 non-compression case selection.
 
-The first client Autobahn launch failed before case execution because the
-generated handshake nonce path exposed a corrupted validation regexp in
+The 11 NON-STRICT cases are 3.2, 3.3, 4.1.3, 4.1.4, 4.2.3, 4.2.4, 5.15,
+6.4.1, 6.4.2, 6.4.3, and 6.4.4. The first seven are output-ordering cases:
+a valid message precedes a malformed frame and its application response should
+be emitted before the protocol-error Close. The final four are fail-fast UTF-8
+timing cases across fragmented/chopped text input.
+
+The first client Autobahn launch exposed a corrupted validation regexp in
 Unblock::WebSocket::_Random. The anchors had been stored as literal A/z instead
-of \A/\z during an earlier repository blob construction. That source is being
-fixed with a regression that exercises a real generated Sec-WebSocket-Key.
+of \A/\z during an earlier repository blob construction. This was fixed and a
+real generated Sec-WebSocket-Key regression was added; the subsequent complete
+client run passed all selected cases under the same acceptance criteria.
 
 ## Autobahn author harness
 

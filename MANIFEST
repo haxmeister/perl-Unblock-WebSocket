@@ -31,6 +31,7 @@ t/23-backend-parity.t
 t/24-protocol-errors.t
 t/25-close-lifecycle.t
 t/26-callback-order.t
+t/27-error-output-order.t
 t/30-handshake.t
 t/31-handshake-rejections.t
 vendor/bq_websocket/LICENSE

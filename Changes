@@ -24,3 +24,5 @@ Revision history for Unblock-WebSocket
     - Keep repository infrastructure and author tests out of the CPAN manifest.
     - Fix generated client-handshake nonce validation and add a regression for
       the real secure-random path.
+    - Preserve a valid pre-error application response before the protocol Close
+      when a later frame in the same native input batch is malformed.
