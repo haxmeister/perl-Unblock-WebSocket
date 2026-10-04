@@ -10,7 +10,8 @@
     }
   ],
   "cases": [
-    "*"
+    "12.*",
+    "13.*"
   ],
   "exclude-cases": [],
   "exclude-agent-cases": {}

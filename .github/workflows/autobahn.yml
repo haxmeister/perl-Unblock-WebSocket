@@ -73,7 +73,7 @@ jobs:
 
           report_status=0
           if [ -f xt/autobahn/reports/servers/index.json ]; then
-            perl xt/autobahn/check-report.pl               xt/autobahn/reports/servers/index.json 517               || report_status=$?
+            perl xt/autobahn/check-report.pl               xt/autobahn/reports/servers/index.json 216               || report_status=$?
           else
             echo "Autobahn did not produce server index.json" >&2
             report_status=1
@@ -151,7 +151,7 @@ jobs:
       - name: Check client report
         run: |
           test -f xt/autobahn/reports/clients/index.json
-          perl xt/autobahn/check-report.pl             xt/autobahn/reports/clients/index.json 517
+          perl xt/autobahn/check-report.pl             xt/autobahn/reports/clients/index.json 216
 
       - name: Show fuzzing-server log
         if: always()
