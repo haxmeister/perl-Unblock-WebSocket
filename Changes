@@ -33,3 +33,8 @@ Revision history for Unblock-WebSocket
     - Require Uniform::HTTP 0.05 and use its FastPath view for read-only
       inspection of exact canonical handshake messages, with the portable
       Uniform contract retained for subclasses and adapters.
+    - Begin RFC 7692 with a portable permessage-deflate codec using raw DEFLATE,
+      context takeover, RSV1 framing, and decompressed message-size limits.
+    - Keep compressed connections on the portable framing backend until native
+      RSV1/compression support is implemented instead of silently degrading the
+      native contract.

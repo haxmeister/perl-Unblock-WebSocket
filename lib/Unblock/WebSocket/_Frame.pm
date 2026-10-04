@@ -121,6 +121,7 @@ sub new_parser {
     my $expect_masked = delete $option{expect_masked};
     my $max_frame_size = exists($option{max_frame_size})
         ? delete($option{max_frame_size}) : 16 * 1024 * 1024;
+    my $allow_rsv1 = delete($option{allow_rsv1}) ? 1 : 0;
     croak 'new_parser(): expect_masked must be zero or one'
         unless defined($expect_masked) && !ref($expect_masked)
             && "$expect_masked" =~ /\A[01]\z/;
@@ -133,6 +134,7 @@ sub new_parser {
     return bless {
         expect_masked  => $expect_masked ? 1 : 0,
         max_frame_size => 0 + $max_frame_size,
+        allow_rsv1     => $allow_rsv1,
         buffer         => '',
     }, 'Unblock::WebSocket::_Frame::Parser';
 }
@@ -171,9 +173,15 @@ sub next_frame {
     my $length7 = $second & 0x7f;
 
     croak 'WebSocket frame uses reserved RSV bits'
-        if $rsv1 || $rsv2 || $rsv3;
+        if $rsv2 || $rsv3;
+    croak 'WebSocket frame uses unnegotiated RSV1'
+        if $rsv1 && !$self->{allow_rsv1};
     croak 'WebSocket frame has reserved opcode'
         unless exists $OPCODE_TO_TYPE{$opcode};
+    croak 'WebSocket continuation frame must not set RSV1'
+        if $rsv1 && $opcode == 0;
+    croak 'WebSocket control frame must not set RSV1'
+        if $rsv1 && $opcode >= 8;
     croak 'WebSocket peer used incorrect masking direction'
         if $masked != $self->{expect_masked};
 

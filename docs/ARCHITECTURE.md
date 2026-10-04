@@ -176,6 +176,13 @@ without exposing WebSocket frame objects as the application API. Compression
 state is per connection and directional; negotiated context-takeover and window
 limits must remain protocol state inside Unblock::WebSocket.
 
+The correctness-first implementation uses Compress::Raw::Zlib with raw DEFLATE
+streams and bounded decompression output. While that portable implementation is
+being proven, compressed connections use the Perl framing backend. This is not
+the final performance path: native bq framing must later gain explicit RSV1 and
+compression support so negotiated compression can use the private native ABI
+without routing every compressed message through Perl framing.
+
 ## Close deadlines
 
 The protocol engine owns Close state and Close frames. It does not own elapsed

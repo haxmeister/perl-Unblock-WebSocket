@@ -259,11 +259,11 @@ removed files.
 
 Immediate:
 
-1. freeze the strict RFC 6455 + Uniform 0.05 handshake baseline
-2. design RFC 7692 permessage-deflate negotiation and compression state
-3. implement permessage-deflate without exposing frames as public objects
+1. validate the portable permessage-deflate codec/RSV1 checkpoint
+2. implement RFC 7692 handshake offer/response negotiation
+3. wire negotiated parameters into Client/Server construction
 4. enable Autobahn compression sections 12 and 13
-5. add portable/native performance benchmarks
+5. design the native compression fast path after portable conformance is proven
 
 Then:
 
@@ -307,7 +307,29 @@ of \A/\z during an earlier repository blob construction. This was fixed and a
 real generated Sec-WebSocket-Key regression was added; the subsequent complete
 client run passed all selected cases under the same acceptance criteria.
 
-## Autobahn author harness
+## RFC 7692 implementation checkpoint
+
+The first permessage-deflate implementation checkpoint is on
+feature/permessage-deflate.
+
+The portable codec uses Compress::Raw::Zlib 2.017 or newer because LimitOutput
+is required for decompression resource control. It uses raw RFC 1951 streams,
+Z_SYNC_FLUSH, strips/appends the RFC 7692 00 00 ff ff tail, supports context
+takeover/no-context-takeover, and enforces max_message_size after decompression.
+
+RSV1 is accepted only on the first text/binary frame of a compressed message.
+Continuation frames and all control frames must keep RSV1 clear.
+
+Until bq/native framing grows explicit RSV1/compression support, negotiating
+permessage-deflate selects the portable framing backend. An explicit
+backend => 'native' combined with compression is rejected rather than silently
+falling back. This is an intermediate correctness checkpoint, not the final
+performance design.
+
+The portable zlib compressor intentionally supports negotiated outgoing window
+sizes 9 through 15. zlib cannot reliably honor an 8-bit compression window, so
+handshake negotiation must not promise an outgoing 8-bit window.
+
 
 xt/autobahn is repository-only and excluded from the CPAN distribution.
 

@@ -18,6 +18,7 @@ WriteMakefile(
         FILES => 'WebSocket.c',
     },
     PREREQ_PM => {
+        'Compress::Raw::Zlib'   => '2.017',
         'Crypt::SysRandom'      => '0.006',
         'Digest::SHA'           => 0,
         'Encode'                => 0,
@@ -30,6 +31,7 @@ WriteMakefile(
         'meta-spec' => { version => 2 },
         no_index => {
             package => [qw(
+                Unblock::WebSocket::_Deflate
                 Unblock::WebSocket::_Engine
                 Unblock::WebSocket::_Frame
                 Unblock::WebSocket::_Frame::Parser

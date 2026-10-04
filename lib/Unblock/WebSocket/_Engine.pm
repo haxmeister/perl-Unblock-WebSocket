@@ -5,6 +5,7 @@ use warnings;
 use Carp qw(croak);
 
 use Unblock::WebSocket ();
+use Unblock::WebSocket::_Deflate ();
 use Unblock::WebSocket::_Frame ();
 use Unblock::WebSocket::_Random ();
 use Unblock::WebSocket::_UTF8 ();
@@ -13,6 +14,52 @@ my %VALID_CLOSE = map { $_ => 1 } (
     1000, 1001, 1002, 1003,
     1007, 1008, 1009, 1010, 1011, 1012, 1013, 1014,
 );
+
+
+sub _checked_deflate_config {
+    my ($value) = @_;
+    return unless defined $value;
+    croak 'new(): permessage_deflate must be a hash reference'
+        unless ref($value) eq 'HASH';
+
+    my %copy = %$value;
+    my %out;
+
+    for my $name (qw(
+        client_no_context_takeover
+        server_no_context_takeover
+    )) {
+        next unless exists $copy{$name};
+        my $flag = delete $copy{$name};
+        croak "new(): permessage_deflate $name must be zero or one"
+            if ref($flag) || "$flag" !~ /\A[01]\z/;
+        $out{$name} = $flag ? 1 : 0;
+    }
+
+    for my $name (qw(
+        client_max_window_bits
+        server_max_window_bits
+    )) {
+        next unless exists $copy{$name};
+        my $bits = delete $copy{$name};
+        croak "new(): permessage_deflate $name must be an integer from 9 through 15"
+            unless defined($bits) && !ref($bits)
+                && "$bits" =~ /\A[0-9]+\z/
+                && $bits >= 9 && $bits <= 15;
+        $out{$name} = 0 + $bits;
+    }
+
+    croak 'new(): unknown permessage_deflate option(s): '
+        . join(', ', sort keys %copy)
+        if %copy;
+
+    return \%out;
+}
+
+sub _compressed_wire_limit {
+    my ($max_message_size) = @_;
+    return $max_message_size + int($max_message_size / 100) + 1024;
+}
 
 sub _new {
     my ($class, %option) = @_;
@@ -42,9 +89,12 @@ sub _new {
     croak 'new(): random_bytes must be a code reference'
         if defined($random_bytes) && ref($random_bytes) ne 'CODE';
 
+    my $deflate_config =
+        _checked_deflate_config(delete $option{permessage_deflate});
+
     my $backend = delete $option{backend};
     if (!defined $backend) {
-        $backend = defined($random_bytes)
+        $backend = ($deflate_config || defined($random_bytes))
             ? 'perl'
             : (Unblock::WebSocket->native_available ? 'native' : 'perl');
     }
@@ -54,6 +104,8 @@ sub _new {
         if $backend eq 'native' && !Unblock::WebSocket->native_available;
     croak 'new(): random_bytes is only supported by the perl backend'
         if $backend eq 'native' && defined $random_bytes;
+    croak 'new(): native backend does not yet support permessage-deflate'
+        if $backend eq 'native' && $deflate_config;
 
     my $native;
     if ($backend eq 'native') {
@@ -80,9 +132,20 @@ sub _new {
         parser           => $backend eq 'perl'
             ? Unblock::WebSocket::_Frame->new_parser(
                 expect_masked  => $role eq 'server' ? 1 : 0,
-                max_frame_size => $max_message_size < 125 ? 125 : $max_message_size,
+                max_frame_size => $deflate_config
+                    ? _compressed_wire_limit($max_message_size)
+                    : ($max_message_size < 125 ? 125 : $max_message_size),
+                allow_rsv1     => $deflate_config ? 1 : 0,
             )
             : undef,
+        deflate          => $deflate_config
+            ? Unblock::WebSocket::_Deflate->new(
+                role             => $role,
+                config           => $deflate_config,
+                max_message_size => $max_message_size,
+            )
+            : undef,
+        deflate_config   => $deflate_config,
         max_message_size => 0 + $max_message_size,
         high_water       => 0 + $high_water,
         low_water        => 0 + $low_water,
@@ -90,8 +153,9 @@ sub _new {
         output_blocked   => 0,
         callbacks        => \%callback,
         random_bytes      => $random_bytes,
-        fragment_opcode  => undef,
-        fragment_payload => '',
+        fragment_opcode     => undef,
+        fragment_payload    => '',
+        fragment_compressed => 0,
         sent_close       => 0,
         received_close   => 0,
         closed           => 0,
@@ -103,6 +167,11 @@ sub _new {
 
 sub role       { $_[0]{role} }
 sub backend    { $_[0]{backend} }
+sub permessage_deflate {
+    my ($self) = @_;
+    return unless $self->{deflate_config};
+    return { %{ $self->{deflate_config} } };
+}
 sub is_open    { !$_[0]{closed} && !$_[0]{sent_close} && !$_[0]{received_close} ? 1 : 0 }
 sub is_closing { !$_[0]{closed} && ($_[0]{sent_close} || $_[0]{received_close}) ? 1 : 0 }
 sub is_closed  { $_[0]{closed} ? 1 : 0 }
@@ -168,6 +237,12 @@ sub _queue_portable_frame {
 
 sub _queue_frame {
     my ($self, $opcode, $payload, %option) = @_;
+
+    if ($self->{deflate} && ($opcode == 1 || $opcode == 2)) {
+        $payload = $self->{deflate}->compress($payload);
+        $option{rsv1} = 1;
+    }
+
     if ($self->{backend} eq 'native') {
         croak 'native frame options are internal-only' if %option;
 
@@ -421,14 +496,21 @@ sub _handle_frame {
         return $self->_fail(
             'WebSocket continuation frame outside fragmented message', 1002
         ) unless defined $self->{fragment_opcode};
+
         $self->{fragment_payload} .= $frame->{payload};
+        my $limit = $self->{fragment_compressed}
+            ? _compressed_wire_limit($self->{max_message_size})
+            : $self->{max_message_size};
         return $self->_fail('WebSocket message exceeds configured limit', 1009)
-            if length($self->{fragment_payload}) > $self->{max_message_size};
+            if length($self->{fragment_payload}) > $limit;
+
         if ($frame->{fin}) {
             my $type_opcode = delete $self->{fragment_opcode};
             my $payload = $self->{fragment_payload};
+            my $compressed = $self->{fragment_compressed} ? 1 : 0;
             $self->{fragment_payload} = '';
-            $self->_deliver_message($type_opcode, $payload);
+            $self->{fragment_compressed} = 0;
+            $self->_deliver_message($type_opcode, $payload, $compressed);
         }
         return;
     }
@@ -438,14 +520,24 @@ sub _handle_frame {
             'WebSocket data frame while fragmented message is unfinished', 1002
         ) if defined $self->{fragment_opcode};
 
+        my $compressed = $frame->{rsv1} ? 1 : 0;
         if (!$frame->{fin}) {
             $self->{fragment_opcode} = $opcode;
             $self->{fragment_payload} = $frame->{payload};
+            $self->{fragment_compressed} = $compressed;
+
+            my $limit = $compressed
+                ? _compressed_wire_limit($self->{max_message_size})
+                : $self->{max_message_size};
             return $self->_fail('WebSocket message exceeds configured limit', 1009)
-                if length($self->{fragment_payload}) > $self->{max_message_size};
+                if length($self->{fragment_payload}) > $limit;
             return;
         }
-        return $self->_deliver_message($opcode, $frame->{payload});
+        return $self->_deliver_message(
+            $opcode,
+            $frame->{payload},
+            $compressed,
+        );
     }
 
     if ($opcode == 8) {
@@ -468,7 +560,20 @@ sub _handle_frame {
 }
 
 sub _deliver_message {
-    my ($self, $opcode, $payload) = @_;
+    my ($self, $opcode, $payload, $compressed) = @_;
+
+    if ($compressed) {
+        my $ok = eval {
+            $payload = $self->{deflate}->decompress($payload);
+            1;
+        };
+        if (!$ok) {
+            my $error = $@ || 'permessage-deflate decompression failed';
+            my $code = $error =~ /exceeds configured limit/ ? 1009 : 1002;
+            return $self->_fail($error, $code);
+        }
+    }
+
     return $self->_fail('WebSocket message exceeds configured limit', 1009)
         if length($payload) > $self->{max_message_size};
 
