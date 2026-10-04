@@ -22,3 +22,5 @@ Revision history for Unblock-WebSocket
     - Add a repository-only Autobahn client/server author harness using blocking
       socket adapters around the public byte API.
     - Keep repository infrastructure and author tests out of the CPAN manifest.
+    - Fix generated client-handshake nonce validation and add a regression for
+      the real secure-random path.

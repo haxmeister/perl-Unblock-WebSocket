@@ -233,6 +233,26 @@ Then:
 12. later build the Linux::Event native adapter and compare against the old
     Linux::Event::WebSocket baseline
 
+## Autobahn results
+
+Server Autobahn result on 2026-10-04:
+
+- 301 selected RFC 6455 cases
+- 287 OK
+- 11 NON-STRICT
+- 3 INFORMATIONAL
+- close behavior: 298 OK / 3 INFORMATIONAL
+- zero failures
+
+This exactly matches the known Linux::Event::WebSocket baseline for the same
+non-compression case selection.
+
+The first client Autobahn launch failed before case execution because the
+generated handshake nonce path exposed a corrupted validation regexp in
+Unblock::WebSocket::_Random. The anchors had been stored as literal A/z instead
+of \A/\z during an earlier repository blob construction. That source is being
+fixed with a regression that exercises a real generated Sec-WebSocket-Key.
+
 ## Autobahn author harness
 
 xt/autobahn is repository-only and excluded from the CPAN distribution.
