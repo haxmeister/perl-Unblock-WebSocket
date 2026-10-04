@@ -230,7 +230,7 @@ unblock_ws_native_input_ex(
 
     while ((msg = bqws_recv(state->ws)) != NULL) {
         uint32_t event = unblock_ws_event_code(msg->type);
-        uint32_t flags = msg_imp(msg)->compressed
+        uint32_t flags = (msg_imp(msg))->compressed
             ? UNBLOCK_WEBSOCKET_MESSAGE_COMPRESSED : 0U;
         int callback_result = UNBLOCK_WEBSOCKET_OK;
 
