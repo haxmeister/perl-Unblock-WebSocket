@@ -2,26 +2,6 @@ name: Autobahn WebSocket conformance
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - 'WebSocket.xs'
-      - 'Makefile.PL'
-      - 'vendor/bq_websocket/**'
-      - 'lib/Unblock/WebSocket/**'
-      - 'xt/autobahn/**'
-      - '.github/workflows/autobahn.yml'
-  pull_request:
-    paths:
-      - 'WebSocket.xs'
-      - 'Makefile.PL'
-      - 'vendor/bq_websocket/**'
-      - 'lib/Unblock/WebSocket/**'
-      - 'xt/autobahn/**'
-      - '.github/workflows/autobahn.yml'
-
-concurrency:
-  group: autobahn-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   server-conformance:
