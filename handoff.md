@@ -191,16 +191,16 @@ Protocol errors map to WebSocket Close behavior including 1002, 1007, and 1009.
 
 ## Current tests
 
-The complete CI matrix before the Uniform 0.05 FastPath update was green on:
+The Uniform::HTTP 0.05 FastPath update passed the complete CI matrix on:
 
 - Linux, Perl 5.16
 - Linux, latest Perl
 - macOS, latest Perl
 - Windows Strawberry Perl 5.40
 
-The pre-FastPath normal suite contained 18 test files and 487 tests. The
-Uniform 0.05 update adds a dedicated canonical FastPath/subclass-fallback
-regression; the new matrix is the acceptance gate for the updated count.
+The current normal suite contains 19 test files and 496 tests. The dedicated
+FastPath regression verifies both exact canonical message views and portable
+fallback for Uniform Request/Response subclasses.
 
 The POD workflow now checks only modules that contain POD, so private internal
 modules without POD no longer create false CI failures.
@@ -259,12 +259,11 @@ removed files.
 
 Immediate:
 
-1. finish the Uniform::HTTP 0.05 FastPath acceptance run on the normal matrix
-   and non-compression Autobahn suite
-2. freeze the strict RFC 6455 + Uniform 0.05 handshake baseline
-3. design RFC 7692 permessage-deflate negotiation and compression state
-4. implement permessage-deflate without exposing frames as public objects
-5. enable Autobahn compression sections 12 and 13
+1. freeze the strict RFC 6455 + Uniform 0.05 handshake baseline
+2. design RFC 7692 permessage-deflate negotiation and compression state
+3. implement permessage-deflate without exposing frames as public objects
+4. enable Autobahn compression sections 12 and 13
+5. add portable/native performance benchmarks
 
 Then:
 
@@ -291,6 +290,10 @@ Server and client Autobahn results on 2026-10-04 are identical:
 This improves on the earlier Linux::Event::WebSocket baseline for the same
 non-compression selection, which had 287 OK, 11 NON-STRICT, and 3
 INFORMATIONAL results.
+
+The Uniform 0.05 FastPath acceptance run preserved these exact Autobahn
+results in both client and server directions, confirming that the handshake
+optimization did not change wire behavior.
 
 The original 11 NON-STRICT cases were 3.2, 3.3, 4.1.3, 4.1.4, 4.2.3, 4.2.4,
 5.15, 6.4.1, 6.4.2, 6.4.3, and 6.4.4. The pre-error response-ordering fix
