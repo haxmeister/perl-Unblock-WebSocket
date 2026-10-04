@@ -73,3 +73,5 @@ Revision history for Unblock-WebSocket
       directions: 514 OK, 0 NON-STRICT, 0 failures, 3 INFORMATIONAL.
     - Record same-run public message-path benchmark results comparing Perl and
       native framing with and without permessage-deflate.
+    - Remove the unnecessary Test::More runtime prerequisite; the minimum
+      supported Perl already provides it for the test suite.

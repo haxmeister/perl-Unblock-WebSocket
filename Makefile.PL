@@ -24,7 +24,6 @@ WriteMakefile(
         'MIME::Base64'          => 0,
         'URI'                   => 0,
         'Uniform::HTTP'         => '0.05',
-        'Test::More'             => 0,
     },
     META_MERGE => {
         'meta-spec' => { version => 2 },
