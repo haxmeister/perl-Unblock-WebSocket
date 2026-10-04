@@ -160,4 +160,99 @@ sub masked_frame {
         'later reserved-bit failure uses Close 1002');
 }
 
+
+{
+    my @error;
+    my $server = Unblock::WebSocket::Server->new(
+        backend            => 'native',
+        permessage_deflate => {},
+        on_error => sub {
+            my ($ws, $message) = @_;
+            push @error, $message;
+        },
+    );
+
+    my $codec = Unblock::WebSocket::_Deflate->new(
+        role             => 'client',
+        config           => {},
+        max_message_size => 4096,
+    );
+    my $compressed = $codec->compress("\xff");
+
+    my $wire = masked_frame(
+        opcode  => 1,
+        payload => $compressed,
+        rsv1    => 1,
+    );
+
+    $server->input($wire);
+    like($error[0] || '', qr/UTF-8/i,
+        'invalid decompressed UTF-8 reports text error');
+
+    my $parser = Unblock::WebSocket::_Frame->new_parser(
+        expect_masked  => 0,
+        max_frame_size => 125,
+        allow_rsv1     => 1,
+    );
+    $parser->input($server->output);
+    my $close = $parser->next_frame;
+    is($close->{opcode}, 8,
+        'invalid decompressed UTF-8 emits Close');
+    is(unpack('n', substr($close->{payload}, 0, 2)), 1007,
+        'invalid decompressed UTF-8 uses Close 1007');
+}
+
+{
+    my @message;
+    my @ping;
+    my $server = Unblock::WebSocket::Server->new(
+        backend            => 'native',
+        permessage_deflate => {},
+        on_message => sub {
+            my ($ws, $payload, $type) = @_;
+            push @message, [ $payload, $type ];
+        },
+        on_ping => sub {
+            my ($ws, $payload) = @_;
+            push @ping, $payload;
+        },
+    );
+
+    my $codec = Unblock::WebSocket::_Deflate->new(
+        role             => 'client',
+        config           => {},
+        max_message_size => 4096,
+    );
+    my $compressed = $codec->compress('compressed fragmented ping ' x 20);
+    my $cut = int(length($compressed) / 2);
+
+    my $first = masked_frame(
+        opcode  => 1,
+        payload => substr($compressed, 0, $cut),
+        fin     => 0,
+        rsv1    => 1,
+    );
+    my $ping = masked_frame(
+        opcode   => 9,
+        payload  => 'between',
+        mask_key => "\x05\x06\x07\x08",
+    );
+    my $last = masked_frame(
+        opcode   => 0,
+        payload  => substr($compressed, $cut),
+        fin      => 1,
+        mask_key => "\x09\x0a\x0b\x0c",
+    );
+
+    $server->input($first . $ping . $last);
+
+    is_deeply(\@ping, [ 'between' ],
+        'Ping interleaved with compressed fragments is delivered');
+    is_deeply(
+        \@message,
+        [ [ 'compressed fragmented ping ' x 20, 'text' ] ],
+        'control interleaving preserves compressed fragment state',
+    );
+}
+
 done_testing;
