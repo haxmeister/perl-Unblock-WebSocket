@@ -69,3 +69,5 @@ Revision history for Unblock-WebSocket
       moved to direct Perl UTF-8 handling.
     - Document the HTTP/1.1, HTTP/2, HTTP/3, compression, FastPath, and
       established Client/Server workflows in the public POD.
+    - Reach full native 517-case Autobahn compression conformance in both
+      directions: 514 OK, 0 NON-STRICT, 0 failures, 3 INFORMATIONAL.

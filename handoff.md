@@ -344,6 +344,39 @@ client window configurations could not negotiate. The corrected harness offers
 client_no_context_takeover plus valueless client_max_window_bits and requires
 all 517 cases in each direction.
 
+## Native full-compression Autobahn result
+
+The authoritative native-compression run completed successfully on 2026-10-04
+at commit 085acf0a9d4ff13683173fa474f5b22305e926d4.
+
+Client direction:
+
+- 517 selected cases
+- 514 OK
+- 3 INFORMATIONAL
+- 0 NON-STRICT
+- 0 UNIMPLEMENTED
+- 0 failures
+- close behavior: 514 OK / 3 INFORMATIONAL
+
+Server direction:
+
+- 517 selected cases
+- 514 OK
+- 3 INFORMATIONAL
+- 0 NON-STRICT
+- 0 failures
+- close behavior: 514 OK / 3 INFORMATIONAL
+
+This proves the native bq framing/masking bridge plus the shared RFC 7692 codec
+passes the complete selected RFC 6455 + permessage-deflate Autobahn matrix in
+both client and server directions.
+
+The earlier portable-client 72-case capability gap was entirely an author
+harness issue. Once client_no_context_takeover plus valueless
+client_max_window_bits were advertised, all four previously unimplemented
+13.3.* through 13.6.* groups executed and passed.
+
 ## RFC 7692 implementation checkpoint
 
 The first permessage-deflate implementation checkpoint is on
@@ -378,10 +411,11 @@ The native RSV1/framing candidate also passes the complete cross-platform
 matrix on Linux Perl 5.16, Linux latest, macOS latest, and Windows Strawberry
 Perl 5.40. Its current suite has 23 test files and 570 tests.
 
-Additional pending regressions cover illegal RSV1 on control/continuation
-frames, malformed compressed payloads, and the valid-compressed-message before
-later malformed-frame ordering path. These are prepared off-branch while the
-517-case Autobahn run is active.
+Additional hardening regressions cover illegal RSV1 on control/continuation
+frames, malformed compressed payloads, invalid decompressed UTF-8, compressed
+fragment control interleaving, pre-error response ordering, and compression
+history across intervening uncompressed messages. These are prepared in the
+post-conformance hardening chain.
 
 The portable compressor supports negotiated outgoing window sizes 8 through
 15. zlib internally promotes a deflate window of 8 to 9, so the 8-bit path uses
