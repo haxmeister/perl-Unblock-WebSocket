@@ -308,6 +308,42 @@ of \A/\z during an earlier repository blob construction. This was fixed and a
 real generated Sec-WebSocket-Key regression was added; the subsequent complete
 client run passed all selected cases under the same acceptance criteria.
 
+## Portable full-compression Autobahn baseline
+
+The first complete 517-case portable-compression run finished on 2026-10-04.
+
+Server direction:
+
+- 517 selected cases
+- 514 OK
+- 3 INFORMATIONAL
+- 0 NON-STRICT
+- 0 failures
+
+The portable server path therefore passed every selected RFC 6455 and RFC 7692
+case.
+
+Client direction:
+
+- 517 selected cases
+- 442 OK
+- 72 UNIMPLEMENTED
+- 3 INFORMATIONAL
+- close behavior: 514 OK / 3 INFORMATIONAL
+
+The 72 UNIMPLEMENTED cases are four complete 18-case capability groups:
+
+- 13.3.*: requestNoContextTakeover=false, requestMaxWindowBits=9
+- 13.4.*: requestNoContextTakeover=false, requestMaxWindowBits=15
+- 13.5.*: requestNoContextTakeover=true, requestMaxWindowBits=9
+- 13.6.*: requestNoContextTakeover=true, requestMaxWindowBits=15
+
+They are author-harness negotiation gaps, not protocol failures. The original
+test client offered only bare permessage-deflate, so those server-selected
+client window configurations could not negotiate. The corrected harness offers
+client_no_context_takeover plus valueless client_max_window_bits and requires
+all 517 cases in each direction.
+
 ## RFC 7692 implementation checkpoint
 
 The first permessage-deflate implementation checkpoint is on
@@ -328,13 +364,12 @@ still owns the RFC 7692 transform and negotiated context/window state. This
 avoids maintaining two compression implementations while removing the
 pure-Perl framing/masking cost from compressed traffic.
 
-The native compression candidate has passed a source-level compatibility audit:
-new socket/fragment flags are zero-initialized by bq's existing allocation path,
-the preallocated error-message storage grows with bqws_msg_imp, compressed state
-is preserved through fragment reassembly, control frames cannot carry RSV1, and
-the original native ABI-v1 prefix remains unchanged. Cross-platform compilation
-is still gated on advancing the feature branch after the portable Autobahn
-baseline is captured.
+The native compression candidate has passed both its source-level compatibility
+audit and the complete four-platform build/test matrix. New socket/fragment
+flags are zero-initialized by bq's existing allocation path, the preallocated
+error-message storage grows with bqws_msg_imp, compressed state is preserved
+through fragment reassembly, control frames cannot carry RSV1, and the original
+native ABI-v1 prefix remains unchanged.
 
 The portable codec plus RFC 7692 handshake negotiation passes the complete
 cross-platform normal matrix.
