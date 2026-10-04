@@ -190,6 +190,18 @@ Current coverage includes:
 - valid-message-before-malformed-frame ordering
 - HTTP/1.1, HTTP/2, and HTTP/3 handshake models
 
+## Regression findings
+
+The expanded standalone regressions found and fixed two real reference-backend
+issues:
+
+- Perl Encode rejects Unicode noncharacters that RFC 3629 permits. The portable
+  UTF-8 layer now validates RFC 3629 itself, permits noncharacters, and rejects
+  surrogates and values above U+10FFFF.
+- Invalid UTF-8 in a received Close reason was being flattened to protocol
+  Close 1002 in the Perl backend. It now maps to Close 1007, matching the native
+  backend and the intended protocol semantics.
+
 ## Important repository-history note
 
 During native-core development one intermediate branch commit accidentally used

@@ -74,9 +74,9 @@ for my $backend (backends()) {
         $server->input($client_wire);
         $client->input($server_wire);
 
-        is_deeply(@server_close, [ [ 1000, 'client done' ] ],
+        is_deeply(\@server_close, [ [ 1000, 'client done' ] ],
             'server sees client close exactly once');
-        is_deeply(@client_close, [ [ 1000, 'server done' ] ],
+        is_deeply(\@client_close, [ [ 1000, 'server done' ] ],
             'client sees server close exactly once');
         ok($server->close_sent && $server->close_received,
             'server records both close directions');

@@ -485,8 +485,11 @@ sub _handle_close {
 
     my ($code, $reason);
     my $ok = eval { ($code, $reason) = _parse_close($payload); 1 };
-    return $self->_fail($@ || 'invalid WebSocket Close payload', 1002)
-        unless $ok;
+    if (!$ok) {
+        my $error = $@ || 'invalid WebSocket Close payload';
+        my $close_code = $error =~ /UTF-8|Unicode scalar/i ? 1007 : 1002;
+        return $self->_fail($error, $close_code);
+    }
 
     $self->{received_close} = 1;
     if (!$self->{sent_close}) {
