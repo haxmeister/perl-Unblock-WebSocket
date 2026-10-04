@@ -873,11 +873,183 @@ Unblock::WebSocket::Handshake - WebSocket handshake helpers using Uniform::HTTP
 
 =head1 DESCRIPTION
 
-This module owns WebSocket-specific HTTP handshake semantics. It does not send
-HTTP itself. C<client_request()> returns a Uniform::HTTP request that can be sent
-by any suitable HTTP implementation.
+This module owns WebSocket-specific HTTP handshake rules.
 
-HTTP/1.1 uses the RFC 6455 Upgrade handshake. HTTP/2 and HTTP/3 use Extended
-CONNECT with C<:protocol = websocket> and a successful status of 200.
+It does not send HTTP and it does not own the HTTP connection. Instead it
+creates and validates L<Uniform::HTTP> request and response objects.
+
+Three bootstrap forms are supported:
+
+=over
+
+=item * HTTP/1.1 RFC 6455 Upgrade
+
+=item * HTTP/2 Extended CONNECT
+
+=item * HTTP/3 Extended CONNECT
+
+=back
+
+=head1 CLIENT
+
+Create a request:
+
+    my ($handshake, $request) =
+        Unblock::WebSocket::Handshake->client_request(
+            'wss://example.com/chat',
+            http_version => '1.1',
+        );
+
+Send C<$request> through the HTTP implementation of your choice.
+
+After receiving the HTTP response:
+
+    $handshake->validate_client_response($response);
+
+Then create the established protocol engine:
+
+    my $ws = Unblock::WebSocket::Client->new(
+        %{ $handshake->connection_options },
+        on_message => sub {
+            my ($ws, $payload, $type) = @_;
+        },
+    );
+
+For HTTP/2 or HTTP/3, use C<http_version =E<gt> '2'> or
+C<http_version =E<gt> '3'>. The generated request uses Extended CONNECT with
+C<:protocol = websocket>.
+
+=head2 Subprotocols
+
+Offer subprotocols with:
+
+    subprotocols => [ 'chat', 'superchat' ]
+
+After response validation:
+
+    my $selected = $handshake->subprotocol;
+
+=head2 permessage-deflate
+
+Offer RFC 7692 compression with:
+
+    permessage_deflate => 1
+
+Or provide negotiation preferences:
+
+    permessage_deflate => {
+        server_no_context_takeover => 1,
+        client_no_context_takeover => 1,
+        server_max_window_bits     => 12,
+        client_max_window_bits     => undef,
+    }
+
+A valueless C<client_max_window_bits> offer is represented by C<undef>.
+
+After response validation, C<connection_options()> contains the compression
+parameters that should be passed to the established Client object.
+
+=head1 SERVER
+
+Validate an incoming Uniform request:
+
+    my $handshake =
+        Unblock::WebSocket::Handshake->server_accept(
+            $request,
+            subprotocols       => [ 'chat' ],
+            permessage_deflate => 1,
+        );
+
+Build the HTTP response:
+
+    my $response = $handshake->server_response;
+
+Send that response through your HTTP implementation.
+
+Then create the established server engine:
+
+    my $ws = Unblock::WebSocket::Server->new(
+        %{ $handshake->connection_options },
+        on_message => sub {
+            my ($ws, $payload, $type) = @_;
+        },
+    );
+
+The server may supply a compression policy instead of a simple true value:
+
+    permessage_deflate => {
+        server_no_context_takeover => 1,
+        client_max_window_bits     => 12,
+    }
+
+=head1 METHODS
+
+=head2 client_request
+
+    my ($handshake, $request) =
+        Unblock::WebSocket::Handshake->client_request($url, %options);
+
+Creates a client handshake and a canonical Uniform::HTTP request.
+
+=head2 server_accept
+
+    my $handshake =
+        Unblock::WebSocket::Handshake->server_accept($request, %options);
+
+Validates an incoming WebSocket handshake request.
+
+=head2 server_response
+
+    my $response = $handshake->server_response;
+
+Returns the successful Uniform::HTTP response for a validated server
+handshake.
+
+=head2 validate_client_response
+
+    $handshake->validate_client_response($response);
+
+Validates a server response to a client handshake.
+
+=head2 connection_options
+
+    my $options = $handshake->connection_options;
+
+Returns a hash reference of negotiated established-connection options.
+
+At present this contains C<permessage_deflate> when RFC 7692 was negotiated.
+
+=head2 permessage_deflate
+
+    my $config = $handshake->permessage_deflate;
+
+Returns the negotiated RFC 7692 parameters, or undef when compression was not
+negotiated.
+
+=head2 subprotocol
+
+Returns the selected WebSocket subprotocol, or undef.
+
+=head2 http_version
+
+Returns C<1.1>, C<2>, or C<3>.
+
+=head2 accept_key
+
+    my $accept =
+        Unblock::WebSocket::Handshake->accept_key($sec_websocket_key);
+
+Calculates the RFC 6455 Sec-WebSocket-Accept value for a valid client key.
+
+=head1 FASTPATH
+
+Exact canonical Uniform::HTTP objects may be inspected through
+L<Uniform::HTTP::FastPath> during handshake validation.
+
+This is only an optimization. Uniform subclasses and adapters continue to use
+the normal portable Uniform::HTTP methods.
+
+WebSocket-generated handshake objects still use normal validated Uniform
+constructors.
 
 =cut
