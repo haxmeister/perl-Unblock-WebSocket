@@ -152,8 +152,11 @@ for my $version ('1.1', '2', '3') {
         $request,
         permessage_deflate => 1,
     );
-    is_deeply($server->permessage_deflate, {},
-        'server skips unsupported 8-bit compressor offer and accepts fallback');
+    is_deeply(
+        $server->permessage_deflate,
+        { server_max_window_bits => 8 },
+        'server accepts preferred 8-bit compressor offer',
+    );
 }
 
 {
