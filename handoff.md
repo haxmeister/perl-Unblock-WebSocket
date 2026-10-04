@@ -494,7 +494,7 @@ implementation.
 
 ## Release status
 
-Version 0.01 is release-ready.
+Version 0.01 is release-ready on main.
 
 The hardened native protocol checkpoint passed the complete 517-case Autobahn
 suite in both client and server directions:
@@ -516,9 +516,10 @@ shared permessage-deflate codec.
 The release audit found no remaining feature, portability, documentation,
 packaging, dependency, manifest, or conformance blocker.
 
+The release candidate has been fast-forwarded to main.
+
 Next release action:
 
-1. merge the release candidate to main when authorized;
-2. tag version 0.01;
-3. create the GitHub release;
-4. upload Unblock-WebSocket-0.01 to CPAN.
+1. tag version 0.01;
+2. create the GitHub release;
+3. upload Unblock-WebSocket-0.01 to CPAN.

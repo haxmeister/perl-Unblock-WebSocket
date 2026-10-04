@@ -1,6 +1,6 @@
 Revision history for Unblock-WebSocket
 
-0.01  unreleased
+0.01  2026-10-04
 
     - Begin standalone platform- and event-loop-neutral WebSocket engine.
     - Add portable client and server byte-stream protocol engines.

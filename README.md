@@ -205,7 +205,7 @@ See `docs/ARCHITECTURE.md` and `docs/PERFORMANCE.md`.
 
 ## Current status
 
-Version 0.01 is in release preparation.
+Version 0.01 is the first release.
 
 The portable reference engine, native backend, HTTP/1.1, HTTP/2, and HTTP/3
 handshake model, and RFC 7692 permessage-deflate are implemented.
