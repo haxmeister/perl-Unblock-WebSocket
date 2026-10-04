@@ -6,7 +6,10 @@ Last updated: 2026-10-04
 
 Repository: haxmeister/perl-Unblock-WebSocket
 
-Development branch: feature/permessage-deflate
+Development branches:
+
+- feature/permessage-deflate - portable compression baseline
+- feature/native-compression - native RSV1/framing candidate
 
 Main currently contains the initial portable protocol core. Native backend work
 is being developed and tested on feature/native-core before it is merged.
@@ -334,8 +337,11 @@ is still gated on advancing the feature branch after the portable Autobahn
 baseline is captured.
 
 The portable codec plus RFC 7692 handshake negotiation passes the complete
-cross-platform normal matrix. The current suite has 22 test files and 549
-tests.
+cross-platform normal matrix.
+
+The native RSV1/framing candidate also passes the complete cross-platform
+matrix on Linux Perl 5.16, Linux latest, macOS latest, and Windows Strawberry
+Perl 5.40. Its current suite has 23 test files and 570 tests.
 
 The portable compressor supports negotiated outgoing window sizes 8 through
 15. zlib internally promotes a deflate window of 8 to 9, so the 8-bit path uses
@@ -372,9 +378,17 @@ transport or event-loop dependency.
 
 The GitHub Autobahn workflow runs the external crossbario/autobahn-testsuite
 Docker image for both server and client conformance. Compression sections 12
-and 13 are now enabled on feature/permessage-deflate. The report checker does
-not hard-code the old 301-case non-compression count during this exploratory
-full-suite phase; the first full run will establish the compression baseline.
+and 13 are enabled.
+
+The full suite contains 517 selected cases per direction: 301 RFC 6455 cases
+plus 216 compression cases. The report checker requires that exact count.
+
+The Autobahn client author harness now advertises the two capabilities used by
+Autobahn's own default permessage-deflate client offer:
+client_no_context_takeover and valueless client_max_window_bits. This is
+necessary for the section 13 fuzzing server to exercise all negotiated
+parameter combinations instead of marking capability-dependent cases
+unimplemented.
 
 ## Release status
 

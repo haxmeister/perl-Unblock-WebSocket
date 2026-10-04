@@ -16,7 +16,10 @@ sub run_connection {
     my ($url, %option) = @_;
     my ($socket, $ws, $tail) = open_client_connection(
         $url,
-        permessage_deflate => 1,
+        permessage_deflate => {
+            client_no_context_takeover => 1,
+            client_max_window_bits     => undef,
+        },
         %option,
     );
     drive_connection($socket, $ws, $tail);

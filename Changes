@@ -51,3 +51,6 @@ Revision history for Unblock-WebSocket
       value as an RFC 7692 preference hint rather than a response ceiling.
     - Extend the private native ABI append-only with extension configuration and
       flagged input/send operations while preserving the original ABI-v1 prefix.
+    - Advertise full client compression capabilities in the repository-only
+      Autobahn harness and require all 517 RFC 6455 + RFC 7692 cases per
+      direction.
