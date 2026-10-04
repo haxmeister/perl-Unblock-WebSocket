@@ -2,6 +2,7 @@ use strict;
 use warnings;
 use Test::More;
 
+use Unblock::WebSocket;
 use Unblock::WebSocket::Client;
 use Unblock::WebSocket::Server;
 use Unblock::WebSocket::_Deflate;
@@ -43,7 +44,7 @@ my $server = Unblock::WebSocket::Server->new(
 );
 
 is($client->backend, 'perl',
-    'compression selects portable backend while native compression is pending');
+    'deterministic random source keeps client on portable backend');
 is_deeply($client->permessage_deflate, {},
     'client exposes negotiated compression config');
 
@@ -178,16 +179,49 @@ is($ping->{opcode}, 9, 'control frame remains Ping');
         'decompressed message limit sends Close 1009');
 }
 
-my $native_ok = eval {
-    Unblock::WebSocket::Client->new(
+SKIP: {
+    skip 'native engine is not available', 5
+        unless Unblock::WebSocket->native_available;
+
+    my @message;
+    my $native_client = Unblock::WebSocket::Client->new(
         backend            => 'native',
         permessage_deflate => {},
     );
-    1;
-};
-ok(!$native_ok,
-    'native backend explicitly rejects compression until native RSV1 path exists');
-like($@, qr/native backend does not yet support permessage-deflate/i,
-    'native compression limitation is explicit');
+    my $portable_server = Unblock::WebSocket::Server->new(
+        backend            => 'perl',
+        permessage_deflate => {},
+        on_message => sub {
+            my ($ws, $payload, $type) = @_;
+            push @message, [ $payload, $type ];
+        },
+    );
+
+    is($native_client->backend, 'native',
+        'compressed client can retain native framing backend');
+
+    $native_client->send_text('native compressed path ' x 20);
+    my $wire = $native_client->output;
+
+    my $parser = Unblock::WebSocket::_Frame->new_parser(
+        expect_masked  => 1,
+        max_frame_size => 4096,
+        allow_rsv1     => 1,
+    );
+    $parser->input($wire);
+    my $frame = $parser->next_frame;
+    ok($frame->{rsv1}, 'native compressed send emits RSV1');
+    is($frame->{opcode}, 1, 'native compressed send retains text opcode');
+
+    $portable_server->input($wire);
+    is_deeply(
+        \@message,
+        [ [ 'native compressed path ' x 20, 'text' ] ],
+        'portable peer decompresses native-framed compressed message',
+    );
+
+    is($server->backend, 'native',
+        'server side of mixed round-trip used native compressed framing');
+}
 
 done_testing;

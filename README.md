@@ -164,8 +164,10 @@ server directions with 298 OK, 0 NON-STRICT, and 3 INFORMATIONAL results out of
 301 cases. The normal suite is also green on Linux Perl 5.16, Linux latest,
 macOS latest, and Windows Strawberry Perl.
 
-RFC 7692 permessage-deflate, compression conformance, and performance
-benchmarking remain before the first release is considered complete.
+RFC 7692 permessage-deflate is implemented with negotiated context/window
+parameters, bounded decompression, and native bq framing/masking when XS is
+available. Full compression Autobahn conformance and performance benchmarking
+remain before the first release is considered complete.
 
 ## License
 

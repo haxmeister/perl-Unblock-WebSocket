@@ -35,9 +35,9 @@ Revision history for Unblock-WebSocket
       Uniform contract retained for subclasses and adapters.
     - Begin RFC 7692 with a portable permessage-deflate codec using raw DEFLATE,
       context takeover, RSV1 framing, and decompressed message-size limits.
-    - Keep compressed connections on the portable framing backend until native
-      RSV1/compression support is implemented instead of silently degrading the
-      native contract.
+    - Add native RSV1/compressed-message support so permessage-deflate keeps
+      bq_websocket framing, masking, and fragment reassembly when XS is available
+      while sharing the same portable DEFLATE codec.
     - Negotiate RFC 7692 permessage-deflate across HTTP/1.1, HTTP/2, and HTTP/3,
       including context-takeover and window-bit parameters plus fallback offers.
     - Export negotiated compression through connection_options() so handshake
@@ -47,3 +47,7 @@ Revision history for Unblock-WebSocket
     - Support an 8-bit RFC 7692 compressor window using Huffman-only raw
       DEFLATE so zlib never emits a distance reference beyond the negotiated
       256-byte window.
+    - Support valueless client_max_window_bits offers and treat a numeric client
+      value as an RFC 7692 preference hint rather than a response ceiling.
+    - Extend the private native ABI append-only with extension configuration and
+      flagged input/send operations while preserving the original ABI-v1 prefix.

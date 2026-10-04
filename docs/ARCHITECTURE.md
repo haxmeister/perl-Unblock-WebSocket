@@ -118,7 +118,7 @@ for native-engine tests.
 Portability must not force every transport read through an intermediate Perl
 scalar before native WebSocket parsing.
 
-The native backend will expose a private, versioned, append-only adapter ABI.
+The native backend exposes a private, versioned, append-only adapter ABI.
 Its requirements are:
 
 - opaque WebSocket engine state;
@@ -128,7 +128,9 @@ Its requirements are:
 - native output-buffer access or submission callbacks;
 - no Linux types, file descriptors, epoll, sockets, or event-loop assumptions;
 - no ownership of TLS or HTTP transport;
-- ABI version and structure size fields for safe extension.
+- ABI version and structure size fields for safe extension;
+- an append-only extension-aware suffix for negotiated message transforms such
+  as permessage-deflate, without changing the original ABI-v1 prefix.
 
 A Linux::Event adapter can then connect its native Stream consumer directly to
 the Unblock native engine without routing raw transport bytes through Perl.
@@ -179,11 +181,14 @@ limits must remain protocol state inside Unblock::WebSocket.
 The correctness-first implementation uses Compress::Raw::Zlib with raw DEFLATE
 streams and bounded decompression output. An 8-bit negotiated compressor window
 uses Z_HUFFMAN_ONLY over a 9-bit zlib raw stream; with no LZ77 distance
-references the emitted stream remains valid for the RFC 7692 8-bit limit. While that portable implementation is
-being proven, compressed connections use the Perl framing backend. This is not
-the final performance path: native bq framing must later gain explicit RSV1 and
-compression support so negotiated compression can use the private native ABI
-without routing every compressed message through Perl framing.
+references the emitted stream remains valid for the RFC 7692 8-bit limit.
+
+The native bq bridge carries an internal compressed-message bit, accepts RSV1
+only when permessage-deflate has been negotiated, preserves that bit through
+fragment reassembly, and emits RSV1 on compressed outgoing data. Therefore XS
+connections can keep native framing and masking while the same _Deflate object
+performs the transform. The private ABI preserves its original version-1 prefix
+and appends extension-aware configure/input/send slots for optimized adapters.
 
 ## Close deadlines
 

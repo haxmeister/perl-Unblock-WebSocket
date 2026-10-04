@@ -303,6 +303,14 @@ sub _checked_pmd_option {
     for my $name (qw(server_max_window_bits client_max_window_bits)) {
         next unless exists $option{$name};
         my $bits = delete $option{$name};
+
+        if ($side eq 'client'
+            && $name eq 'client_max_window_bits'
+            && !defined $bits) {
+            $out{$name} = undef;
+            next;
+        }
+
         croak "$where: permessage_deflate $name must be an integer "
             . 'from 8 through 15'
             unless defined($bits) && !ref($bits)
@@ -329,9 +337,13 @@ sub _format_pmd {
     push @part, 'server_max_window_bits='
         . $parameter->{server_max_window_bits}
         if exists $parameter->{server_max_window_bits};
-    push @part, 'client_max_window_bits='
-        . $parameter->{client_max_window_bits}
-        if exists $parameter->{client_max_window_bits};
+
+    if (exists $parameter->{client_max_window_bits}) {
+        push @part, defined($parameter->{client_max_window_bits})
+            ? 'client_max_window_bits='
+                . $parameter->{client_max_window_bits}
+            : 'client_max_window_bits';
+    }
 
     return join('; ', @part);
 }
@@ -436,11 +448,9 @@ sub _client_pmd_response {
         croak 'WebSocket permessage-deflate response included '
             . 'client_max_window_bits that was not offered'
             unless exists $offer->{client_max_window_bits};
-        croak 'WebSocket permessage-deflate response increased '
-            . 'client_max_window_bits'
-            if defined($offer->{client_max_window_bits})
-                && $agreed->{client_max_window_bits}
-                    > $offer->{client_max_window_bits};
+
+        # A value in the client's offer is a preference hint, not a maximum
+        # on the server's response. The response value is the agreed limit.
     }
     elsif (exists $offer->{client_max_window_bits}
         && defined $offer->{client_max_window_bits}) {

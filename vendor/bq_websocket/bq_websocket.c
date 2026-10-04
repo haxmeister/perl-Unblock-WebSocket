@@ -273,6 +273,7 @@ static void bqws_mutex_unlock(bqws_mutex *m)
 typedef struct bqws_msg_imp bqws_msg_imp;
 struct bqws_msg_imp {
 	uint32_t magic; // = BQWS_MSG_MAGIC
+	bool compressed;
 
 	// Socket that is responsible of freeing this message
 	// or NULL if it's owned by the user.
@@ -317,6 +318,7 @@ typedef struct {
 	bool finished;
 	bool masked;
 	bool validate_utf8;
+	bool partial_compressed;
 	uint32_t mask_key;
 	bqws_msg_type partial_type;
 	unblock_bqws_utf8_state utf8;
@@ -381,6 +383,7 @@ struct bqws_socket {
 	bool recv_control_messages;
 	bool mask_server;
 	bool unsafe_dont_mask_client;
+	bool allow_rsv1;
 	bqws_verify_fn *verify_fn;
 	void *verify_user;
 	bqws_message_fn *message_fn;
@@ -565,6 +568,7 @@ static void ws_fail(bqws_socket *ws, bqws_error err)
 		if (ws->state.state == BQWS_STATE_OPEN && !ws->state.close_to_send) {
 			bqws_msg_imp *close_msg = (bqws_msg_imp*)ws->state.error_msg_data;
 			close_msg->magic = BQWS_MSG_MAGIC;
+			close_msg->compressed = false;
 			close_msg->allocator.free_fn = &null_free;
 			close_msg->owner = ws;
 			close_msg->prev = NULL;
@@ -822,6 +826,7 @@ static bqws_msg_imp *msg_alloc(bqws_socket *ws, bqws_msg_type type, size_t size)
 	if (!msg) return NULL;
 
 	msg->magic = BQWS_MSG_MAGIC;
+	msg->compressed = false;
 	msg->owner = ws;
 	msg->allocator = ws->allocator;
 	msg->prev = NULL;
@@ -1983,12 +1988,20 @@ static bool ws_read_data(bqws_socket *ws, bqws_io_recv_fn recv_fn, void *user)
 
 		// Static header bits
 		bool fin = (h[0] & 0x80) != 0;
-		if (h[0] & 0x70) {
-			// Reserved bits RSV1-3
+		bool rsv1 = (h[0] & 0x40) != 0;
+		uint32_t opcode = (uint32_t)(h[0] & 0x0f);
+
+		// RSV2/RSV3 are never negotiated here. RSV1 is reserved for
+		// permessage-deflate and is valid only on the first data frame.
+		if (h[0] & 0x30) {
 			ws_fail(ws, BQWS_ERR_RESERVED_BIT);
 			return false;
 		}
-		uint32_t opcode = (uint32_t)(h[0] & 0x0f);
+		if (rsv1 && (!ws->allow_rsv1 || opcode == 0x0 || opcode >= 0x8)) {
+			ws_fail(ws, BQWS_ERR_RESERVED_BIT);
+			return false;
+		}
+
 		uint32_t mask = (uint32_t)(h[1] & 0x80) != 0;
 		uint64_t payload_length = (uint64_t)(h[1] & 0x7f);
 		h += 2;
@@ -2037,6 +2050,7 @@ static bool ws_read_data(bqws_socket *ws, bqws_io_recv_fn recv_fn, void *user)
 		bqws_assert((size_t)((const char*)h - ws->io.recv_header) == buf->header_size);
 
 		bqws_msg_type type = BQWS_MSG_INVALID;
+		bool compressed = false;
 
 		// Resolve the type of the message
 		if (opcode == 0x0) {
@@ -2048,15 +2062,18 @@ static bool ws_read_data(bqws_socket *ws, bqws_io_recv_fn recv_fn, void *user)
 				return false;
 			}
 
+			compressed = buf->partial_compressed;
 			type = (bqws_msg_type)(buf->partial_type | BQWS_MSG_PARTIAL_BIT);
 			if (fin) {
 				type = (bqws_msg_type)(type | BQWS_MSG_FINAL_BIT);
 				buf->partial_type = BQWS_MSG_INVALID;
+				buf->partial_compressed = false;
 			}
 
 		} else if (opcode == 0x1 || opcode == 0x2) {
 			// Text or Binary
 			type = opcode == 0x1 ? BQWS_MSG_TEXT : BQWS_MSG_BINARY;
+			compressed = rsv1;
 
 			// A new data message cannot begin until the current fragmented
 			// message has received its final continuation frame.
@@ -2067,6 +2084,7 @@ static bool ws_read_data(bqws_socket *ws, bqws_io_recv_fn recv_fn, void *user)
 
 			if (!fin) {
 				buf->partial_type = type;
+				buf->partial_compressed = compressed;
 				type = (bqws_msg_type)(type | BQWS_MSG_PARTIAL_BIT);
 			}
 		} else if (opcode >= 0x8 && opcode <= 0xa) {
@@ -2091,7 +2109,8 @@ static bool ws_read_data(bqws_socket *ws, bqws_io_recv_fn recv_fn, void *user)
 		// state survives continuation-frame boundaries, while control frames
 		// leave it untouched.
 		buf->validate_utf8 =
-			(type & BQWS_MSG_TYPE_MASK) == BQWS_MSG_TEXT;
+			(type & BQWS_MSG_TYPE_MASK) == BQWS_MSG_TEXT
+			&& !compressed;
 		if (opcode == 0x1) {
 			unblock_bqws_utf8_reset(&buf->utf8);
 		} else if (opcode == 0x2) {
@@ -2102,6 +2121,7 @@ static bool ws_read_data(bqws_socket *ws, bqws_io_recv_fn recv_fn, void *user)
 		bqws_msg_imp *imp = msg_alloc(ws, type, msg_size);
 		if (!imp) return false;
 
+		imp->compressed = compressed;
 		buf->msg = imp;
 		buf->offset = 0;
 
@@ -2213,6 +2233,7 @@ static bool ws_read_data(bqws_socket *ws, bqws_io_recv_fn recv_fn, void *user)
 			bqws_msg_type base_type = (bqws_msg_type)(msg->msg.type & BQWS_MSG_TYPE_MASK);
 			bqws_msg_imp *combined = msg_alloc(ws, base_type, ws->io.recv_partial_size);
 			if (!combined) return false;
+			combined->compressed = msg->compressed;
 
 			size_t offset = 0;
 
@@ -2221,6 +2242,7 @@ static bool ws_read_data(bqws_socket *ws, bqws_io_recv_fn recv_fn, void *user)
 			while ((part = msg_dequeue(&ws->recv_partial_queue)) != NULL) {
 				bqws_assert(part->magic == BQWS_MSG_MAGIC);
 				bqws_assert((part->msg.type & BQWS_MSG_TYPE_MASK) == base_type);
+				bqws_assert(part->compressed == combined->compressed);
 
 				memcpy(combined->msg.data + offset, part->msg.data, part->msg.size);
 				offset += part->msg.size;
@@ -2449,7 +2471,9 @@ static bool ws_write_data(bqws_socket *ws, bqws_io_send_fn *send_fn, void *user)
 
 		uint8_t *h = (uint8_t*)ws->io.send_header;
 		// Static header bits
-		h[0] = (fin ? 0x80 : 0x0) | (uint8_t)opcode;
+		h[0] = (fin ? 0x80 : 0x0)
+			| ((msg->compressed && opcode != 0x0 && opcode < 0x8) ? 0x40 : 0x0)
+			| (uint8_t)opcode;
 		h[1] = (mask ? 0x80 : 0x0) | (uint8_t)payload_len;
 		h += 2;
 
@@ -3117,6 +3141,26 @@ void bqws_send(bqws_socket *ws, bqws_msg_type type, const void *data, size_t siz
 	ws_enqueue_send(ws, imp);
 }
 
+static void unblock_bqws_send_data(
+	bqws_socket *ws,
+	bqws_msg_type type,
+	const void *data,
+	size_t size,
+	bool compressed)
+{
+	bqws_assert(ws && ws->magic == BQWS_SOCKET_MAGIC);
+	bqws_assert(type == BQWS_MSG_TEXT || type == BQWS_MSG_BINARY);
+	if (ws->err) return;
+	bqws_assert(size == 0 || data);
+
+	bqws_msg_imp *imp = msg_alloc(ws, type, size);
+	if (!imp) return;
+
+	imp->compressed = compressed;
+	memcpy(imp->msg.data, data, size);
+	ws_enqueue_send(ws, imp);
+}
+
 void bqws_send_binary(bqws_socket *ws, const void *data, size_t size)
 {
 	bqws_send(ws, BQWS_MSG_BINARY, data, size);
@@ -3519,6 +3563,12 @@ void bqws_direct_set_override_state(bqws_socket *ws, bqws_state state)
 	bqws_mutex_lock(&ws->state.mutex);
 	ws->state.override_state = state;
 	bqws_mutex_unlock(&ws->state.mutex);
+}
+
+static void unblock_bqws_set_allow_rsv1(bqws_socket *ws, bool allow)
+{
+	bqws_assert(ws && ws->magic == BQWS_SOCKET_MAGIC);
+	ws->allow_rsv1 = allow;
 }
 
 void bqws_direct_fail(bqws_socket *ws, bqws_error err)

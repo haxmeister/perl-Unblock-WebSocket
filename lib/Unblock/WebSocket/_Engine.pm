@@ -94,7 +94,7 @@ sub _new {
 
     my $backend = delete $option{backend};
     if (!defined $backend) {
-        $backend = ($deflate_config || defined($random_bytes))
+        $backend = defined($random_bytes)
             ? 'perl'
             : (Unblock::WebSocket->native_available ? 'native' : 'perl');
     }
@@ -104,13 +104,18 @@ sub _new {
         if $backend eq 'native' && !Unblock::WebSocket->native_available;
     croak 'new(): random_bytes is only supported by the perl backend'
         if $backend eq 'native' && defined $random_bytes;
-    croak 'new(): native backend does not yet support permessage-deflate'
-        if $backend eq 'native' && $deflate_config;
 
     my $native;
     if ($backend eq 'native') {
         require Unblock::WebSocket::_Native;
-        $native = Unblock::WebSocket::_Native->new($role, $max_message_size);
+        my $wire_limit = $deflate_config
+            ? _compressed_wire_limit($max_message_size)
+            : $max_message_size;
+        $native = Unblock::WebSocket::_Native->new(
+            $role,
+            $wire_limit,
+            $deflate_config ? 1 : 0,
+        );
     }
 
     my %callback;
@@ -244,6 +249,7 @@ sub _queue_frame {
     }
 
     if ($self->{backend} eq 'native') {
+        my $compressed = delete($option{rsv1}) ? 1 : 0;
         croak 'native frame options are internal-only' if %option;
 
         # A native input batch can contain a complete valid message followed by
@@ -255,10 +261,18 @@ sub _queue_frame {
         # path; ordinary native traffic remains fully native.
         if ($self->{native_pre_error_event}
             && $self->{native}->_error_code) {
-            return $self->_queue_portable_frame($opcode, $payload);
+            return $self->_queue_portable_frame(
+                $opcode,
+                $payload,
+                ($compressed ? (rsv1 => 1) : ()),
+            );
         }
 
-        $self->{native}->queue_message($opcode, $payload);
+        $self->{native}->queue_message(
+            $opcode,
+            $payload,
+            $compressed,
+        );
         return $self->_sync_native_output;
     }
 
@@ -449,13 +463,12 @@ sub _handle_native_events {
     my ($self, $events) = @_;
     for my $event (@$events) {
         last if $self->{closed} || $self->{failed};
-        my ($opcode, $payload) = @$event;
+        my ($opcode, $payload, $flags) = @$event;
+        $flags ||= 0;
 
-        if ($opcode == 1) {
-            $self->_invoke('on_message', $payload, 'text');
-        }
-        elsif ($opcode == 2) {
-            $self->_invoke('on_message', $payload, 'binary');
+        if ($opcode == 1 || $opcode == 2) {
+            my $compressed = ($flags & 0x01) ? 1 : 0;
+            $self->_deliver_message($opcode, $payload, $compressed);
         }
         elsif ($opcode == 8) {
             $self->_handle_native_close($payload);

@@ -171,13 +171,38 @@ unblock_ws_event_code(bqws_msg_type type)
     }
 }
 
+typedef struct {
+    unblock_websocket_event_fn fn;
+    void *user;
+} unblock_ws_legacy_event;
+
 static int
-unblock_ws_native_input(
+unblock_ws_legacy_event_adapter(
+    void *user,
+    uint32_t event,
+    uint32_t flags,
+    const char *data,
+    size_t length
+)
+{
+    unblock_ws_legacy_event *legacy = (unblock_ws_legacy_event *)user;
+
+    if (flags != 0)
+        return UNBLOCK_WEBSOCKET_ERROR;
+
+    if (legacy->fn == NULL)
+        return UNBLOCK_WEBSOCKET_OK;
+
+    return legacy->fn(legacy->user, event, data, length);
+}
+
+static int
+unblock_ws_native_input_ex(
     void *opaque,
     const char *data,
     size_t length,
     size_t *consumed,
-    unblock_websocket_event_fn event_fn,
+    unblock_websocket_event_ex_fn event_fn,
     void *event_user
 )
 {
@@ -205,9 +230,12 @@ unblock_ws_native_input(
 
     while ((msg = bqws_recv(state->ws)) != NULL) {
         uint32_t event = unblock_ws_event_code(msg->type);
+        uint32_t flags = msg_imp(msg)->compressed
+            ? UNBLOCK_WEBSOCKET_MESSAGE_COMPRESSED : 0U;
         int callback_result = UNBLOCK_WEBSOCKET_OK;
 
         if (event == UNBLOCK_WEBSOCKET_EVENT_TEXT
+            && !(flags & UNBLOCK_WEBSOCKET_MESSAGE_COMPRESSED)
             && !unblock_bqws_valid_utf8(
                 (const uint8_t *)msg->data, msg->size)) {
             bqws_free_msg(msg);
@@ -223,7 +251,7 @@ unblock_ws_native_input(
 
         if (event_fn != NULL)
             callback_result = event_fn(
-                event_user, event, msg->data, msg->size);
+                event_user, event, flags, msg->data, msg->size);
 
         bqws_free_msg(msg);
 
@@ -241,33 +269,65 @@ unblock_ws_native_input(
 }
 
 static int
-unblock_ws_native_send(
+unblock_ws_native_input(
+    void *opaque,
+    const char *data,
+    size_t length,
+    size_t *consumed,
+    unblock_websocket_event_fn event_fn,
+    void *event_user
+)
+{
+    unblock_ws_legacy_event legacy;
+    legacy.fn = event_fn;
+    legacy.user = event_user;
+
+    return unblock_ws_native_input_ex(
+        opaque,
+        data,
+        length,
+        consumed,
+        unblock_ws_legacy_event_adapter,
+        &legacy
+    );
+}
+
+static int
+unblock_ws_native_send_ex(
     void *opaque,
     uint32_t opcode,
+    uint32_t flags,
     const char *data,
     size_t length
 )
 {
     unblock_ws_native *state = (unblock_ws_native *)opaque;
+    bool compressed =
+        (flags & UNBLOCK_WEBSOCKET_MESSAGE_COMPRESSED) != 0;
 
     if (state == NULL || state->ws == NULL || (length > 0 && data == NULL))
         return UNBLOCK_WEBSOCKET_ERROR;
+    if (flags & ~UNBLOCK_WEBSOCKET_MESSAGE_COMPRESSED)
+        return UNBLOCK_WEBSOCKET_ERROR;
 
     if (opcode == UNBLOCK_WEBSOCKET_EVENT_TEXT) {
-        if (!unblock_bqws_valid_utf8((const uint8_t *)data, length))
+        if (!compressed
+            && !unblock_bqws_valid_utf8((const uint8_t *)data, length))
             return UNBLOCK_WEBSOCKET_ERROR;
-        bqws_send(state->ws, BQWS_MSG_TEXT, data, length);
+        unblock_bqws_send_data(
+            state->ws, BQWS_MSG_TEXT, data, length, compressed);
     }
     else if (opcode == UNBLOCK_WEBSOCKET_EVENT_BINARY) {
-        bqws_send(state->ws, BQWS_MSG_BINARY, data, length);
+        unblock_bqws_send_data(
+            state->ws, BQWS_MSG_BINARY, data, length, compressed);
     }
     else if (opcode == UNBLOCK_WEBSOCKET_EVENT_PING) {
-        if (length > 125)
+        if (compressed || length > 125)
             return UNBLOCK_WEBSOCKET_ERROR;
         bqws_send_ping(state->ws, data, length);
     }
     else if (opcode == UNBLOCK_WEBSOCKET_EVENT_PONG) {
-        if (length > 125)
+        if (compressed || length > 125)
             return UNBLOCK_WEBSOCKET_ERROR;
         bqws_send_pong(state->ws, data, length);
     }
@@ -277,6 +337,45 @@ unblock_ws_native_send(
 
     return bqws_get_error(state->ws) == BQWS_OK
         ? UNBLOCK_WEBSOCKET_OK : UNBLOCK_WEBSOCKET_ERROR;
+}
+
+static int
+unblock_ws_native_send(
+    void *opaque,
+    uint32_t opcode,
+    const char *data,
+    size_t length
+)
+{
+    return unblock_ws_native_send_ex(
+        opaque, opcode, 0U, data, length);
+}
+
+static int
+unblock_ws_native_configure(
+    void *opaque,
+    uint32_t features,
+    size_t max_wire_message_size
+)
+{
+    unblock_ws_native *state = (unblock_ws_native *)opaque;
+    bqws_limits limits;
+
+    if (state == NULL || state->ws == NULL || max_wire_message_size == 0)
+        return UNBLOCK_WEBSOCKET_ERROR;
+    if (features & ~UNBLOCK_WEBSOCKET_FEATURE_PERMESSAGE_DEFLATE)
+        return UNBLOCK_WEBSOCKET_ERROR;
+
+    limits = bqws_get_limits(state->ws);
+    limits.max_recv_msg_size = max_wire_message_size;
+    bqws_set_limits(state->ws, &limits);
+
+    unblock_bqws_set_allow_rsv1(
+        state->ws,
+        (features & UNBLOCK_WEBSOCKET_FEATURE_PERMESSAGE_DEFLATE) != 0
+    );
+
+    return UNBLOCK_WEBSOCKET_OK;
 }
 
 static int
@@ -362,7 +461,10 @@ static const unblock_websocket_native_ops_v1_t unblock_ws_native_ops = {
     unblock_ws_native_output,
     unblock_ws_native_error_code,
     unblock_ws_native_error_string,
-    unblock_ws_native_memory_used
+    unblock_ws_native_memory_used,
+    unblock_ws_native_configure,
+    unblock_ws_native_input_ex,
+    unblock_ws_native_send_ex
 };
 
 static unblock_ws_native *
@@ -427,6 +529,7 @@ static int
 unblock_ws_collect_event(
     void *user,
     uint32_t event,
+    uint32_t flags,
     const char *data,
     size_t length
 )
@@ -435,11 +538,9 @@ unblock_ws_collect_event(
     AV *pair = newAV();
     SV *payload = newSVpvn(data == NULL ? "" : data, (STRLEN)length);
 
-    if (event == UNBLOCK_WEBSOCKET_EVENT_TEXT)
-        SvUTF8_on(payload);
-
     av_push(pair, newSVuv((UV)event));
     av_push(pair, payload);
+    av_push(pair, newSVuv((UV)flags));
     av_push(collector->events, newRV_noinc((SV *)pair));
     return UNBLOCK_WEBSOCKET_OK;
 }
@@ -449,14 +550,29 @@ MODULE = Unblock::WebSocket    PACKAGE = Unblock::WebSocket::_Native
 PROTOTYPES: DISABLE
 
 SV *
-new(class, role, max_message_size)
+new(class, role, max_message_size, allow_permessage_deflate = 0)
     const char *class
     const char *role
     UV max_message_size
+    IV allow_permessage_deflate
+PREINIT:
+    unblock_ws_native *state;
 CODE:
     RETVAL = unblock_ws_new_object(class, role, max_message_size);
     if (RETVAL == NULL)
         croak("native WebSocket context initialization failed");
+
+    if (allow_permessage_deflate) {
+        state = unblock_ws_from_sv(RETVAL);
+        if (unblock_ws_native_configure(
+                state,
+                UNBLOCK_WEBSOCKET_FEATURE_PERMESSAGE_DEFLATE,
+                (size_t)max_message_size)
+            != UNBLOCK_WEBSOCKET_OK) {
+            SvREFCNT_dec(RETVAL);
+            croak("native WebSocket compression configuration failed");
+        }
+    }
 OUTPUT:
     RETVAL
 
@@ -477,7 +593,7 @@ CODE:
     data = SvPVbyte(bytes, length);
     events = newAV();
     collector.events = events;
-    result = unblock_ws_native_input(
+    result = unblock_ws_native_input_ex(
         state,
         data,
         (size_t)length,
@@ -502,21 +618,32 @@ OUTPUT:
     RETVAL
 
 void
-queue_message(self, opcode, bytes)
+queue_message(self, opcode, bytes, compressed = 0)
     SV *self
     UV opcode
     SV *bytes
+    IV compressed
 PREINIT:
     unblock_ws_native *state;
     STRLEN length;
     const char *data;
+    uint32_t flags;
 CODE:
     state = unblock_ws_from_sv(self);
-    if (opcode == UNBLOCK_WEBSOCKET_EVENT_TEXT && SvUTF8(bytes))
+    if (opcode == UNBLOCK_WEBSOCKET_EVENT_TEXT
+        && !compressed
+        && SvUTF8(bytes))
         data = SvPVutf8(bytes, length);
     else
         data = SvPVbyte(bytes, length);
-    if (unblock_ws_native_send(state, (uint32_t)opcode, data, (size_t)length)
+
+    flags = compressed ? UNBLOCK_WEBSOCKET_MESSAGE_COMPRESSED : 0U;
+    if (unblock_ws_native_send_ex(
+            state,
+            (uint32_t)opcode,
+            flags,
+            data,
+            (size_t)length)
         != UNBLOCK_WEBSOCKET_OK)
         croak("native WebSocket send failed");
 

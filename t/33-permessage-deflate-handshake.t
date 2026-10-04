@@ -287,4 +287,58 @@ for my $version ('1.1', '2', '3') {
     );
 }
 
+{
+    my ($client, $request) =
+        Unblock::WebSocket::Handshake->client_request(
+            'wss://example.test/chat',
+            http_version => '1.1',
+            key          => 'dGhlIHNhbXBsZSBub25jZQ==',
+            permessage_deflate => {
+                client_max_window_bits => undef,
+            },
+        );
+
+    is_deeply(
+        [ header_values($request, 'Sec-WebSocket-Extensions') ],
+        [ 'permessage-deflate; client_max_window_bits' ],
+        'client can advertise valueless client_max_window_bits',
+    );
+
+    my $response = response_for(
+        $client,
+        'permessage-deflate; client_max_window_bits=12',
+    );
+    $client->validate_client_response($response);
+    is_deeply(
+        $client->permessage_deflate,
+        { client_max_window_bits => 12 },
+        'server selects client compressor window from valueless offer',
+    );
+}
+
+{
+    my ($client) =
+        Unblock::WebSocket::Handshake->client_request(
+            'wss://example.test/chat',
+            http_version => '1.1',
+            key          => 'dGhlIHNhbXBsZSBub25jZQ==',
+            permessage_deflate => {
+                client_max_window_bits => 8,
+            },
+        );
+
+    my $response = response_for(
+        $client,
+        'permessage-deflate; client_max_window_bits=12',
+    );
+    my $ok = eval { $client->validate_client_response($response); 1 };
+    ok($ok,
+        'client accepts client_max_window_bits response above offer hint');
+    is_deeply(
+        $client->permessage_deflate,
+        { client_max_window_bits => 12 },
+        'response value, not client hint, defines agreed compressor limit',
+    );
+}
+
 done_testing;

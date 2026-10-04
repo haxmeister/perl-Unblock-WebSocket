@@ -148,6 +148,12 @@ The ABI is designed for high-performance native transports and includes:
 - error and memory-use inspection
 - ABI version and structure size fields
 
+ABI version 1 keeps its original prefix intact. Compression support is appended
+as an extension-aware suffix with configure(), input_ex(), and send_ex(). The
+extended event/send paths carry a compressed-message flag without overloading
+WebSocket opcodes. Existing uncompressed ABI-v1 consumers can continue to use
+the original prefix after checking struct_size as before.
+
 No Linux::Event type, fd, socket, epoll object, TLS object, or event-loop object
 appears in the ABI.
 
@@ -259,22 +265,14 @@ removed files.
 
 Immediate:
 
-1. run the full Autobahn suite with sections 12 and 13 enabled
-2. record the full compression case count and exact failures
-3. fix compression conformance findings until client/server runs are clean
-4. freeze portable RFC 7692 behavior with focused regressions
-5. design the native compression fast path after portable conformance is proven
-
-Then:
-
-6. prepare Autobahn client/server harnesses for Unblock
-7. run the full non-compression Autobahn suite
-8. investigate and eliminate remaining NON-STRICT cases
-9. design and implement RFC 7692 permessage-deflate
-10. enable Autobahn compression sections
-11. add performance benchmarks for reference/native public paths
-12. later build the Linux::Event native adapter and compare against the old
-    Linux::Event::WebSocket baseline
+1. capture the first complete Autobahn sections 12/13 report
+2. validate the native RSV1 bridge across the full platform matrix
+3. rerun full Autobahn using native compressed framing and fix any remaining
+   RFC 7692 conformance findings
+4. freeze RFC 7692 behavior with focused portable/native regressions
+5. add portable/native performance benchmarks
+6. later build the Linux::Event native adapter and compare against the old
+   Linux::Event::WebSocket baseline
 
 ## Autobahn results
 
@@ -320,11 +318,12 @@ takeover/no-context-takeover, and enforces max_message_size after decompression.
 RSV1 is accepted only on the first text/binary frame of a compressed message.
 Continuation frames and all control frames must keep RSV1 clear.
 
-Until bq/native framing grows explicit RSV1/compression support, negotiating
-permessage-deflate selects the portable framing backend. An explicit
-backend => 'native' combined with compression is rejected rather than silently
-falling back. This is an intermediate correctness checkpoint, not the final
-performance design.
+The native bridge now has explicit RSV1/compressed-message support. When XS is
+available, permessage-deflate keeps bq_websocket responsible for frame parsing,
+masking, output framing, and fragment reassembly. The shared _Deflate codec
+still owns the RFC 7692 transform and negotiated context/window state. This
+avoids maintaining two compression implementations while removing the
+pure-Perl framing/masking cost from compressed traffic.
 
 The portable codec plus RFC 7692 handshake negotiation passes the complete
 cross-platform normal matrix. The current suite has 22 test files and 549
@@ -341,6 +340,11 @@ Handshake negotiation supports permessage-deflate on HTTP/1.1, HTTP/2, and
 HTTP/3. Both client and server can negotiate all four RFC 7692 parameters, and
 the server can skip an unsupported/malformed preferred offer in favor of a
 later fallback offer.
+
+Valueless client_max_window_bits offers are supported. A numeric
+client_max_window_bits value in the client offer is treated as the RFC 7692
+preference hint it is; the server response value defines the actual negotiated
+client compressor window and may be larger than the hint.
 
 Handshake->connection_options returns the negotiated permessage_deflate config
 for direct use when constructing Client or Server protocol engines.

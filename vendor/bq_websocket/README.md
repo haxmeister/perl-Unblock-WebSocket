@@ -25,6 +25,11 @@ Linux::Event::WebSocket:
 - text payloads use incremental RFC 3629 validation while bytes arrive,
   including across continuation frames, so invalid UTF-8 fails as soon as the
   offending octet is knowable rather than waiting for logical message completion;
+- negotiated RSV1 is accepted only on the first data frame of a
+  permessage-deflate message, carried internally through fragment reassembly,
+  and exposed to the Unblock wrapper as a compressed-message flag;
+- compressed outgoing data can be queued through the native framer so bq still
+  owns framing and masking while Unblock's shared RFC 7692 codec owns DEFLATE;
 - every received Ping retains its own Pong response instead of keeping only the
   latest pending Pong;
 - when control messages are exposed, a validated received Close is copied before
