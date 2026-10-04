@@ -267,8 +267,6 @@ sub _pmd_parameters {
             next;
         }
 
-        croak "$where parameter '$name' must not use a quoted value"
-            if $item->{quoted};
         my $bits = $item->{value};
         croak "$where parameter '$name' has invalid window bits"
             unless $bits =~ /\A(?:8|9|1[0-5])\z/;

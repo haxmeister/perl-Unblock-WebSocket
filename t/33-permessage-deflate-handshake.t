@@ -341,4 +341,39 @@ for my $version ('1.1', '2', '3') {
     );
 }
 
+{
+    my $request = base_request(
+        'permessage-deflate; server_max_window_bits="10"; '
+        . 'client_max_window_bits="12"'
+    );
+    my $server = Unblock::WebSocket::Handshake->server_accept(
+        $request,
+        permessage_deflate => {
+            client_max_window_bits => 11,
+        },
+    );
+    is_deeply(
+        $server->permessage_deflate,
+        {
+            server_max_window_bits => 10,
+            client_max_window_bits => 11,
+        },
+        'quoted server_max_window_bits is accepted after numeric validation',
+    );
+}
+
+for my $bad (
+    'permessage-deflate; server_max_window_bits="08"',
+    'permessage-deflate; server_max_window_bits="16"',
+    'permessage-deflate; server_max_window_bits="ten"',
+) {
+    my $request = base_request($bad);
+    my $server = Unblock::WebSocket::Handshake->server_accept(
+        $request,
+        permessage_deflate => 1,
+    );
+    ok(!defined($server->permessage_deflate),
+        "invalid quoted window value is declined: $bad");
+}
+
 done_testing;
