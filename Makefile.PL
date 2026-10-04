@@ -18,15 +18,13 @@ WriteMakefile(
         FILES => 'WebSocket.c',
     },
     PREREQ_PM => {
-        'Crypt::URandom'        => 0,
+        'Crypt::SysRandom'      => '0.006',
         'Digest::SHA'           => 0,
         'Encode'                => 0,
         'MIME::Base64'          => 0,
         'URI'                   => 0,
         'Uniform::HTTP'         => '0.04',
-    },
-    TEST_REQUIRES => {
-        'Test::More' => 0,
+        'Test::More'             => 0,
     },
     META_MERGE => {
         'meta-spec' => { version => 2 },

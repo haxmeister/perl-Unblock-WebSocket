@@ -345,11 +345,17 @@ unblock_ws_native_memory_used(void *opaque)
     return bqws_get_memory_used(state->ws);
 }
 
+static void *
+unblock_ws_native_abi_create(uint32_t role, size_t max_message_size)
+{
+    return (void *)unblock_ws_native_create(role, max_message_size);
+}
+
 static const unblock_websocket_native_ops_v1_t unblock_ws_native_ops = {
     UNBLOCK_WEBSOCKET_NATIVE_ABI_VERSION,
     sizeof(unblock_websocket_native_ops_v1_t),
     "Unblock::WebSocket native protocol engine",
-    unblock_ws_native_create,
+    unblock_ws_native_abi_create,
     unblock_ws_native_destroy,
     unblock_ws_native_input,
     unblock_ws_native_send,

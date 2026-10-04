@@ -16,8 +16,8 @@ sub bytes {
         return Unblock::WebSocket::_Native->_random_bytes($length);
     }
 
-    require Crypt::URandom;
-    return Crypt::URandom::urandom($length);
+    require Crypt::SysRandom;
+    return Crypt::SysRandom::random_bytes($length);
 }
 
 sub mask_key {

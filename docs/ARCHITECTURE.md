@@ -145,9 +145,11 @@ RFC 6455 client masks require unpredictable random keys. The old Linux-only
 engine uses getrandom(2). Unblock cannot make that system call part of its
 portable contract.
 
-The portable path uses Crypt::URandom. The native backend will use a portable
-secure-random provider abstraction rather than weakening masking randomness.
-Platform-specific implementations may exist behind that abstraction.
+The portable fallback uses Crypt::SysRandom. The native backend uses one
+internal secure-random abstraction backed by the operating system: getrandom(2)
+on Linux, BCryptGenRandom on Windows, and arc4random_buf on macOS/BSD systems.
+Those platform details stay behind the Unblock boundary and never become part
+of the public API.
 
 ## Extensions
 

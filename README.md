@@ -129,9 +129,10 @@ See `docs/ARCHITECTURE.md` and `docs/PERFORMANCE.md`.
 ## Current status
 
 Initial development. The portable reference engine and HTTP/1.1, HTTP/2, and
-HTTP/3 handshake model are being established first. The production native
-backend, full Autobahn validation, and permessage-deflate remain to be added
-before the first release is considered complete.
+HTTP/3 handshake model are implemented. A vendored bq_websocket native backend
+and versioned native adapter ABI are being validated across Linux, macOS, and
+Windows. Full Autobahn validation, public-engine/native-backend integration, and
+permessage-deflate remain before the first release is considered complete.
 
 ## License
 
