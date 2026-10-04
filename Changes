@@ -64,4 +64,4 @@ Revision history for Unblock-WebSocket
       INFORMATIONAL with zero failures; client capability-gap run 442 OK / 72
       UNIMPLEMENTED / 3 INFORMATIONAL.
     - Accept a server client_max_window_bits response above the client's numeric
-      hint while retaining the stricter local hint for actual compressor state.
+      hint and use the response value as the agreed compressor limit.

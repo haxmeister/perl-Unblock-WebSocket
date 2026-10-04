@@ -366,11 +366,10 @@ the server can skip an unsupported/malformed preferred offer in favor of a
 later fallback offer.
 
 Valueless client_max_window_bits offers are supported. A numeric
-client_max_window_bits offer is a preference hint, so the server may legally
-reply with a larger value. However, the client still promises not to use a
-compressor window larger than its own numeric hint. The handshake therefore
-accepts a larger response but connection_options() retains the stricter local
-hint for actual compressor configuration.
+client_max_window_bits offer is only a preference hint, so the server may
+legally reply with a larger value. The response value becomes the agreed
+compressor limit and the client must use that agreed value for actual
+compression behavior.
 
 Handshake->connection_options returns the negotiated permessage_deflate config
 for direct use when constructing Client or Server protocol engines.
