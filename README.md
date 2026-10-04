@@ -143,14 +143,15 @@ than requiring a new object allocation for every message.
 
 The public byte API is not intended to cap performance.
 
-The architecture reserves a private versioned native adapter ABI so an XS
+The distribution includes a private versioned native adapter ABI so an XS
 transport can feed borrowed native buffers directly into the native WebSocket
 engine and consume native output without an unavoidable intermediate Perl byte
 copy.
 
-This is the planned path for Linux::Event::WebSocket to recover the performance
-of its current native bq_websocket integration after protocol ownership moves
-here.
+The ABI is append-only and already carries extension-aware compressed-message
+flags while preserving its original version-1 prefix. This is the intended path
+for Linux::Event::WebSocket to retain native framing performance after protocol
+ownership moves here.
 
 See `docs/ARCHITECTURE.md` and `docs/PERFORMANCE.md`.
 
