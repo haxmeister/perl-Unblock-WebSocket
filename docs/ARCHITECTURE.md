@@ -76,8 +76,21 @@ outweighs per-message allocation cost.
 WebSocket uses HTTP to establish the stream, but HTTP transport is not owned by
 this distribution.
 
-Unblock::WebSocket::Handshake uses Uniform::HTTP request/response objects and
-supports three forms:
+Unblock::WebSocket::Handshake uses Uniform::HTTP 0.05 request/response objects.
+
+For exact canonical Uniform messages, handshake validation takes one read-only
+FastPath ABI 1 view and reads method/status/protocol/header data from that
+borrowed view. The view is never retained and the message is not mutated while
+it is in use. Uniform subclasses and adapters remain supported through the
+portable method contract.
+
+WebSocket-generated handshake requests and responses continue to use the normal
+validated Uniform constructors. This keeps the trust boundary small while
+still allowing Unblock::HTTP1, Unblock::HTTP2, and Unblock::HTTP3 to use their
+own Uniform FastPath serializers when sending those exact canonical objects.
+The native established-WebSocket ABI remains independent of Uniform and HTTP.
+
+The handshake supports three forms:
 
 - HTTP/1.1 RFC 6455 Upgrade;
 - HTTP/2 Extended CONNECT;

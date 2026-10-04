@@ -101,6 +101,8 @@ adding a second trusted construction boundary or changing established-message
 performance.
 
 
+## Reference backend
+
 The Perl frame/parser engine remains available as:
 
     backend => 'perl'
@@ -189,21 +191,16 @@ Protocol errors map to WebSocket Close behavior including 1002, 1007, and 1009.
 
 ## Current tests
 
-The native build has reached 76 passing tests on:
-
-- Linux, latest Perl
-- Linux, Perl 5.16
-- macOS, latest Perl
-- Windows Strawberry Perl 5.40
-
-The complete CI matrix is green on:
+The complete CI matrix before the Uniform 0.05 FastPath update was green on:
 
 - Linux, Perl 5.16
 - Linux, latest Perl
 - macOS, latest Perl
 - Windows Strawberry Perl 5.40
 
-The current normal suite contains 18 test files and 487 tests.
+The pre-FastPath normal suite contained 18 test files and 487 tests. The
+Uniform 0.05 update adds a dedicated canonical FastPath/subclass-fallback
+regression; the new matrix is the acceptance gate for the updated count.
 
 The POD workflow now checks only modules that contain POD, so private internal
 modules without POD no longer create false CI failures.
@@ -262,12 +259,12 @@ removed files.
 
 Immediate:
 
-1. audit the now-strict non-compression RFC 6455 path and freeze its regression
-   baseline
-2. design RFC 7692 permessage-deflate negotiation and compression state
-3. implement permessage-deflate without exposing frames as public objects
-4. enable Autobahn compression sections 12 and 13
-5. add portable/native performance benchmarks
+1. finish the Uniform::HTTP 0.05 FastPath acceptance run on the normal matrix
+   and non-compression Autobahn suite
+2. freeze the strict RFC 6455 + Uniform 0.05 handshake baseline
+3. design RFC 7692 permessage-deflate negotiation and compression state
+4. implement permessage-deflate without exposing frames as public objects
+5. enable Autobahn compression sections 12 and 13
 
 Then:
 
@@ -291,8 +288,9 @@ Server and client Autobahn results on 2026-10-04 are identical:
 - close behavior: 298 OK / 3 INFORMATIONAL
 - zero failures
 
-This exactly matches the known Linux::Event::WebSocket baseline for the same
-non-compression case selection.
+This improves on the earlier Linux::Event::WebSocket baseline for the same
+non-compression selection, which had 287 OK, 11 NON-STRICT, and 3
+INFORMATIONAL results.
 
 The original 11 NON-STRICT cases were 3.2, 3.3, 4.1.3, 4.1.4, 4.2.3, 4.2.4,
 5.15, 6.4.1, 6.4.2, 6.4.3, and 6.4.4. The pre-error response-ordering fix
