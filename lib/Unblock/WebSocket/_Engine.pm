@@ -42,10 +42,10 @@ sub _checked_deflate_config {
     )) {
         next unless exists $copy{$name};
         my $bits = delete $copy{$name};
-        croak "new(): permessage_deflate $name must be an integer from 9 through 15"
+        croak "new(): permessage_deflate $name must be an integer from 8 through 15"
             unless defined($bits) && !ref($bits)
                 && "$bits" =~ /\A[0-9]+\z/
-                && $bits >= 9 && $bits <= 15;
+                && $bits >= 8 && $bits <= 15;
         $out{$name} = 0 + $bits;
     }
 

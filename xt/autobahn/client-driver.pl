@@ -14,7 +14,11 @@ my $case_count;
 
 sub run_connection {
     my ($url, %option) = @_;
-    my ($socket, $ws, $tail) = open_client_connection($url, %option);
+    my ($socket, $ws, $tail) = open_client_connection(
+        $url,
+        permessage_deflate => 1,
+        %option,
+    );
     drive_connection($socket, $ws, $tail);
     close $socket;
     return;

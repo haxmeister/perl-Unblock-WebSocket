@@ -170,10 +170,17 @@ sub _socket_target {
 sub open_client_connection {
     my ($url, %option) = @_;
 
+    my $pmd = delete $option{permessage_deflate};
+    my %handshake_option = (
+        http_version => '1.1',
+    );
+    $handshake_option{permessage_deflate} = $pmd
+        if defined $pmd;
+
     my ($handshake, $request) =
         Unblock::WebSocket::Handshake->client_request(
             $url,
-            http_version => '1.1',
+            %handshake_option,
         );
 
     my ($host, $port) = _socket_target($url);
@@ -189,21 +196,36 @@ sub open_client_connection {
     my $response = _parse_response($head);
     $handshake->validate_client_response($response);
 
-    my $ws = Unblock::WebSocket::Client->new(%option);
+    my $ws = Unblock::WebSocket::Client->new(
+        %{ $handshake->connection_options },
+        %option,
+    );
     return ($socket, $ws, $tail);
 }
 
 sub accept_server_connection {
     my ($socket, %option) = @_;
 
+    my $pmd = delete $option{permessage_deflate};
     my ($head, $tail) = _read_http_head($socket);
     my $request = _parse_request($head);
+
+    my %handshake_option;
+    $handshake_option{permessage_deflate} = $pmd
+        if defined $pmd;
+
     my $handshake =
-        Unblock::WebSocket::Handshake->server_accept($request);
+        Unblock::WebSocket::Handshake->server_accept(
+            $request,
+            %handshake_option,
+        );
     my $response = $handshake->server_response;
     _write_all($socket, _serialize_response($response));
 
-    my $ws = Unblock::WebSocket::Server->new(%option);
+    my $ws = Unblock::WebSocket::Server->new(
+        %{ $handshake->connection_options },
+        %option,
+    );
     return ($ws, $tail);
 }
 

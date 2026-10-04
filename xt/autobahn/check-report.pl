@@ -3,7 +3,7 @@ use warnings;
 use JSON::PP qw(decode_json);
 
 my $file = shift @ARGV || 'xt/autobahn/reports/servers/index.json';
-my $expected_cases = shift @ARGV || 301;
+my $expected_cases = shift @ARGV;
 
 open my $fh, '<', $file
     or die "cannot open Autobahn report $file: $!\n";
@@ -17,12 +17,13 @@ my %behavior;
 
 for my $agent (sort keys %$report) {
     my $case_count = scalar keys %{$report->{$agent}};
+    print "Autobahn cases for $agent: $case_count\n";
     push @failure, [
         $agent,
         '-',
         "cases=$case_count expected=$expected_cases",
         undef,
-    ] if $case_count != $expected_cases;
+    ] if defined($expected_cases) && $case_count != $expected_cases;
 
     for my $case (sort keys %{$report->{$agent}}) {
         my $result = $report->{$agent}{$case};
@@ -54,4 +55,6 @@ if (@failure) {
     exit 1;
 }
 
-print "Autobahn RFC 6455 conformance passed ($expected_cases cases per agent).\n";
+print defined($expected_cases)
+    ? "Autobahn RFC 6455 conformance passed ($expected_cases cases per agent).\n"
+    : "Autobahn RFC 6455 conformance passed.\n";

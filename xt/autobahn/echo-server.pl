@@ -28,6 +28,7 @@ while (my $socket = $listener->accept) {
     eval {
         my ($ws, $tail) = accept_server_connection(
             $socket,
+            permessage_deflate => 1,
             on_message => sub {
                 my ($connection, $payload, $type) = @_;
                 if ($type eq 'text') {

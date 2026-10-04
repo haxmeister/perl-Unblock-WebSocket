@@ -42,3 +42,5 @@ Revision history for Unblock-WebSocket
       including context-takeover and window-bit parameters plus fallback offers.
     - Export negotiated compression through connection_options() so handshake
       state can configure Client/Server without coupling them to the HTTP engine.
+    - Enable Autobahn compression sections 12 and 13 in the repository-only
+      author harness for full RFC 7692 conformance work.

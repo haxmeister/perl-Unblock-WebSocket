@@ -259,10 +259,10 @@ removed files.
 
 Immediate:
 
-1. validate the portable codec plus RFC 7692 negotiation on the full CI matrix
-2. update the Autobahn author harness to request negotiated permessage-deflate
-3. enable Autobahn compression sections 12 and 13
-4. fix compression conformance findings until client/server runs are clean
+1. run the full Autobahn suite with sections 12 and 13 enabled
+2. record the full compression case count and exact failures
+3. fix compression conformance findings until client/server runs are clean
+4. freeze portable RFC 7692 behavior with focused regressions
 5. design the native compression fast path after portable conformance is proven
 
 Then:
@@ -326,6 +326,10 @@ backend => 'native' combined with compression is rejected rather than silently
 falling back. This is an intermediate correctness checkpoint, not the final
 performance design.
 
+The portable codec plus RFC 7692 handshake negotiation passes the complete
+cross-platform normal matrix. The current suite has 22 test files and 549
+tests.
+
 The portable zlib compressor intentionally supports negotiated outgoing window
 sizes 9 through 15. zlib cannot reliably honor an 8-bit compression window, so
 handshake negotiation must not promise an outgoing 8-bit window.
@@ -348,8 +352,10 @@ drives the public Client/Server byte API. It does not introduce a runtime
 transport or event-loop dependency.
 
 The GitHub Autobahn workflow runs the external crossbario/autobahn-testsuite
-Docker image for both server and client conformance. Sections 12 and 13 remain
-excluded until RFC 7692 permessage-deflate exists.
+Docker image for both server and client conformance. Compression sections 12
+and 13 are now enabled on feature/permessage-deflate. The report checker does
+not hard-code the old 301-case non-compression count during this exploratory
+full-suite phase; the first full run will establish the compression baseline.
 
 ## Release status
 
