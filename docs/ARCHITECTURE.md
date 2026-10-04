@@ -102,16 +102,16 @@ Unblock::HTTP3 at runtime.
 
 ## Reference and native engines
 
-The initial portable Perl frame engine establishes behavior, API semantics,
-regression vectors, and an in-memory conformance target.
+The portable Perl frame engine establishes behavior, API semantics, regression
+vectors, and an independent in-memory reference implementation.
 
-Production performance is expected to come from a native backend derived from
-the already validated bq_websocket work in Linux::Event::WebSocket. The native
-backend must implement the same observable protocol behavior without changing
-the public byte API.
+The production native backend is derived from the already validated
+bq_websocket work in Linux::Event::WebSocket and implements the same observable
+protocol behavior behind the same public byte API. It is selected automatically
+when available unless a portable-only option is requested.
 
-The portable implementation therefore also acts as an independent reference
-for native-engine tests.
+The portable implementation remains executable as an independent differential
+reference for native-engine tests.
 
 ## Native fast path requirement
 
@@ -168,15 +168,16 @@ of the public API.
 
 ## Extensions
 
-RSV bits are currently rejected by the reference engine because no extension
-has been negotiated yet. The architecture must not permanently reserve that
-behavior.
-
 Extension negotiation and frame transforms belong inside Unblock::WebSocket.
-The first required extension is RFC 7692 permessage-deflate. It must be added
-without exposing WebSocket frame objects as the application API. Compression
-state is per connection and directional; negotiated context-takeover and window
-limits must remain protocol state inside Unblock::WebSocket.
+
+RSV2 and RSV3 remain reserved and are rejected. RSV1 is accepted only when an
+extension that owns it has been negotiated, and permessage-deflate uses RSV1 on
+the first frame of each compressed data message.
+
+RFC 7692 permessage-deflate is implemented without exposing WebSocket frame
+objects as the application API. Compression state is per connection and
+directional; negotiated context-takeover and window limits remain protocol
+state inside Unblock::WebSocket.
 
 The correctness-first implementation uses Compress::Raw::Zlib with raw DEFLATE
 streams and bounded decompression output. An 8-bit negotiated compressor window
