@@ -12,3 +12,5 @@ Revision history for Unblock-WebSocket
     - Add Linux, macOS, and Windows CI for the native core.
     - Use the native engine by default behind the public client/server API while
       retaining the Perl engine as a differential reference backend.
+    - Port RFC 6455 parser vectors, UTF-8 edge cases, protocol-error mappings,
+      and close lifecycle regressions into standalone in-memory tests.

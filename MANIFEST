@@ -23,10 +23,14 @@ t/00-load.t
 t/10-frame.t
 t/11-native.t
 t/12-native-errors.t
+t/13-frame-rfc.t
+t/14-utf8-rfc.t
 t/20-memory-loopback.t
 t/21-fragmentation.t
 t/22-limits-errors.t
 t/23-backend-parity.t
+t/24-protocol-errors.t
+t/25-close-lifecycle.t
 t/30-handshake.t
 vendor/bq_websocket/LICENSE
 vendor/bq_websocket/README.md

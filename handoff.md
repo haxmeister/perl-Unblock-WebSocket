@@ -164,12 +164,15 @@ The native build has reached 76 passing tests on:
 - macOS, latest Perl
 - Windows Strawberry Perl 5.40
 
-Windows CI is fully green at the current checkpoint.
+The complete CI matrix is green on:
 
-Linux and macOS protocol/build tests are green. Their current CI failure is only
-the POD workflow treating private modules with no POD as errors. The workflow
-fix is being committed next so podchecker runs only on modules that actually
-contain POD.
+- Linux, Perl 5.16
+- Linux, latest Perl
+- macOS, latest Perl
+- Windows Strawberry Perl 5.40
+
+The POD workflow now checks only modules that contain POD, so private internal
+modules without POD no longer create false CI failures.
 
 Current coverage includes:
 
@@ -199,11 +202,12 @@ removed files.
 
 Immediate:
 
-1. make the entire cross-platform CI matrix green
-2. port standalone RFC 6455 parser vectors and UTF-8 edge cases
-3. port close lifecycle cases as in-memory transport tests
-4. expand malformed-frame and error-code parity tests
-5. add broader handshake rejection/subprotocol tests
+1. validate the newly ported RFC 6455 parser, UTF-8, protocol-error, and close
+   lifecycle regressions across the full CI matrix
+2. expand malformed-frame and callback-order parity tests
+3. add broader handshake rejection/subprotocol tests
+4. add native/reference memory-lifetime regression coverage
+5. prepare Autobahn client/server harnesses
 
 Then:
 
