@@ -42,6 +42,7 @@ t/30-handshake.t
 t/31-handshake-rejections.t
 t/32-uniform-fastpath.t
 t/33-permessage-deflate-handshake.t
+t/34-attached-transport.t
 vendor/bq_websocket/LICENSE
 vendor/bq_websocket/README.md
 vendor/bq_websocket/bq_websocket.c
