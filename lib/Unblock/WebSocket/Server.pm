@@ -15,43 +15,59 @@ __END__
 
 =head1 NAME
 
-Unblock::WebSocket::Server - established server-side WebSocket protocol engine
+Unblock::WebSocket::Server - server side of an established WebSocket connection
 
 =head1 SYNOPSIS
 
+    use Unblock::WebSocket::Server;
+
+    # The opening HTTP handshake must already be complete.
     my $ws = Unblock::WebSocket::Server->new(
         on_message => sub {
-            my ($ws, $payload, $type) = @_;
+            my ($ws, $message, $type) = @_;
+            $ws->send_text("echo:$message");
         },
     );
 
-    $ws->input($bytes_from_transport);
+    # Receive WebSocket bytes from a connection:
+    $ws->input($bytes);
 
+    # Manual mode: move outgoing bytes to the transport write queue.
     while ($ws->want_write) {
-        $transport->write($ws->output);
+        $host->write($ws->output);
     }
 
 =head1 DESCRIPTION
 
-This object owns established server-side WebSocket protocol state.
+Server handles the WebSocket protocol for a server-side connection.
+It expects incoming client frames to be masked and sends unmasked
+frames back.
 
-It does not own a listener, socket, TLS connection, HTTP server, timer, or event
-loop.
+It does not create a listener, accept sockets, perform TLS, or send
+the opening HTTP response.
 
-Normally it is created after
-L<Unblock::WebSocket::Handshake/server_accept> validates the opening request:
+First validate the incoming HTTP request with
+L<Unblock::WebSocket::Handshake/server_accept> and send its
+C<server_response()> through your HTTP implementation. Once the
+HTTP connection has switched to WebSocket, create Server:
 
     my $ws = Unblock::WebSocket::Server->new(
         %{ $handshake->connection_options },
-        on_message => sub { ... },
+        on_message => sub {
+            my ($ws, $message, $type) = @_;
+            $ws->send_text($message);
+        },
     );
 
-When RFC 7692 was negotiated, those options carry the permessage-deflate state
-needed by the established connection.
+The connection options include negotiated compression, if any.
 
-=head1 TRANSPORT MODEL
+=head1 CHOOSING OUTPUT MODE
 
-An attached host can handle output automatically:
+The manual mode uses C<input($bytes)> to receive data and C<output()>
+while C<want_write()> is true to retrieve wire bytes. The caller
+writes the bytes to its ordered transport queue.
+
+In attached mode:
 
     my $ws = Unblock::WebSocket::Server->new(
         transport => $host,
@@ -61,20 +77,38 @@ An attached host can handle output automatically:
         },
     );
 
-The host supplies C<unblock_send($bytes)>, C<unblock_finish()> and
-C<unblock_abort($reason)>. It feeds incoming bytes with C<input()>.
-All generated output, including output from later application callbacks, is
-handed to C<unblock_send()>. The host accepts the whole buffer or throws. A
-false result signals congestion after acceptance; call C<resume_output()>
-when the host is ready again.
+The host implements C<unblock_send($bytes)>, C<unblock_finish()> and
+C<unblock_abort($reason)>. The engine automatically sends outgoing
+WebSocket bytes through C<unblock_send()>.
 
-Without C<transport>, manual input/output remains supported: call C<output()>
-while C<want_write()> is true. C<output()> cannot be used with an attached
-transport. C<input_eof()> means read-side EOF, while
-C<transport_error($reason)> means a broken transport and immediate abort.
+The host must accept the entire buffer or throw. If it returns a
+defined false value, every byte was accepted but the host is congested.
+Call C<$ws-E<gt>resume_output()> when the host is ready to accept more.
 
-The host owns networking and must drain already accepted bytes before a
-graceful finish. C<close()> starts the WebSocket Close handshake, not immediate
-socket teardown.
+In attached mode C<output()> is not available. The transport must
+remain alive while the WebSocket connection is in use; the engine
+holds only a weak reference to it.
+
+=head1 MESSAGES AND CLOSE
+
+C<on_message> receives C<($ws, $payload, $type)> where C<$type>
+is C<text> or C<binary>. Use C<send_text()> and C<send_binary()> to
+reply. Received Ping frames are answered automatically.
+
+Other callbacks are C<on_ping>, C<on_pong>, C<on_close>, C<on_error>
+and C<on_drain>.
+
+A false send return means the message was accepted but the producer
+should pause until C<on_drain>.
+
+C<close()> starts a WebSocket Close handshake. In attached mode
+C<unblock_finish()> is called after the peer Close and pending
+protocol output are handled. The host must drain its own write
+queue before shutting down. Use C<input_eof()> on read-side EOF
+or C<transport_error($reason)> for a transport failure.
+
+See L<Unblock::WebSocket/ESTABLISHED CONNECTION API> for the method
+reference and C<docs/INTEGRATION.md> for HTTP/1, HTTP/2 and HTTP/3
+integration.
 
 =cut
