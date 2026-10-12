@@ -87,6 +87,12 @@ jobs:
           UNBLOCK_WS_H3_KEY=/tmp/unblock-ws-h3-key.pem \
             prove -b xt/http3-handoff.t
 
+      - name: Benchmark manual and attached output
+        if: matrix.os == 'ubuntu-latest' && matrix.perl == 'latest'
+        shell: bash
+        run: |
+          perl -Mblib bench/attached-path.pl 5000
+
       - name: Check POD syntax
         if: runner.os != 'Windows'
         shell: bash
