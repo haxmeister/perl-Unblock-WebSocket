@@ -8,8 +8,7 @@ use Unblock::WebSocket::Server;
 # through their own ordered socket, stream, or HTTP body queue.
 # ------------------------------------------------------------
 
-{
-    package Example::Host;
+package Example::Host;
 
     sub new { bless { outgoing => [], finished => 0 }, shift }
 
@@ -38,7 +37,7 @@ use Unblock::WebSocket::Server;
         }
         return $count;
     }
-}
+package main;
 
 # ------------------------------------------------------------
 # Application usage. Imagine the HTTP opening handshake has
