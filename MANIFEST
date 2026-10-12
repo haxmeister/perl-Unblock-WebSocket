@@ -6,6 +6,7 @@ MANIFEST.SKIP
 README.md
 WebSocket.xs
 docs/ARCHITECTURE.md
+docs/INTEGRATION.md
 docs/PERFORMANCE.md
 include/unblock_websocket_native.h
 lib/Unblock/WebSocket.pm
