@@ -20,6 +20,43 @@ __END__
 
 Unblock::WebSocket - event-loop and platform neutral WebSocket protocol engine
 
+=head1 SYNOPSIS
+
+Use the Handshake helper to establish WebSocket over HTTP, then use
+Client or Server for messages. The example below assumes the HTTP
+handshake has already succeeded:
+
+    use Unblock::WebSocket::Server;
+
+    my $ws = Unblock::WebSocket::Server->new(
+        on_message => sub {
+            my ($ws, $message, $type) = @_;
+            $ws->send_text("echo:$message");
+        },
+    );
+
+    # Received WebSocket bytes, not HTTP bytes:
+    $ws->input($bytes);
+
+    # Manual output mode:
+    while ($ws->want_write) {
+        $host->write($ws->output);
+    }
+
+Or attach a host that implements the three transport methods:
+
+    my $ws = Unblock::WebSocket::Server->new(
+        transport => $host,
+        on_message => sub {
+            my ($ws, $message, $type) = @_;
+            $ws->send_text($message);
+        },
+    );
+
+In attached mode output is passed to the host automatically.
+See the runnable C<examples/handshake-memory.pl> and
+C<examples/memory-attached.pl> programs in the distribution.
+
 =head1 DESCRIPTION
 
 Unblock::WebSocket provides WebSocket protocol handling without owning sockets,
@@ -29,6 +66,10 @@ Use L<Unblock::WebSocket::Handshake> for the opening HTTP handshake.
 
 Use L<Unblock::WebSocket::Client> or L<Unblock::WebSocket::Server> after the
 WebSocket stream has been established.
+
+The opening HTTP handshake is separate from established WebSocket traffic.
+The caller carries Uniform::HTTP request and response objects using its own
+HTTP implementation, then passes only WebSocket bytes to Client or Server.
 
 The distribution supports:
 
@@ -52,9 +93,15 @@ The public protocol API remains bytes in and bytes out. Applications do not
 need to work with WebSocket frame objects. Output can be drained manually or
 handed to an optional attached transport automatically.
 
+=head1 INSTALLATION
+
+Install with C<cpanm Unblock::WebSocket>. The distribution requires Perl
+5.16 or newer and builds an XS extension, so a C compiler is needed for
+installation from source.
+
 =head1 NATIVE BACKEND
 
-C<native_available()> reports whether the optional XS backend loaded.
+C<native_available()> reports whether the XS backend loaded.
 
 When available, normal established connections use the native backend unless a
 portable-only option requires otherwise. This is an implementation detail; the
