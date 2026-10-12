@@ -97,6 +97,7 @@ jobs:
         if: matrix.os == 'ubuntu-latest' && matrix.perl == 'latest'
         shell: bash
         run: |
+          perl -Mblib examples/handshake-memory.pl
           perl -Mblib examples/memory-attached.pl
           perl -Mblib examples/memory-manual.pl
 
