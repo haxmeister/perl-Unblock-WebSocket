@@ -123,3 +123,29 @@ a large improvement for uncompressed traffic and remains beneficial when the
 shared permessage-deflate codec is enabled. The native-compression gain becomes
 smaller as payload size grows because DEFLATE itself accounts for more of the
 total work.
+
+
+## Attached output versus manual output
+
+The repository-only bench/attached-path.pl runs a paired same-process comparison
+of the manual output() drain and the optional transport => $host path.
+
+It uses a minimal host accepting complete buffers immediately, payloads of
+64 bytes and 1024 bytes, and both Perl and native protocol backends when XS
+is available. The workload deliberately isolates outgoing message framing and
+buffer handoff; it is not an end-to-end network latency test.
+
+Run it from the built distribution:
+
+    perl -Mblib bench/attached-path.pl 10000
+
+The Linux CI test workflow records same-run results using 5000 measured
+messages after a 1000-message warmup for each case.
+
+Attached output has an additional host-method call and a transport-mode branch.
+Its value is simpler adapter code and automatic output from delayed callbacks,
+not an inherent speed improvement over direct native buffer ownership.
+
+The existing private native adapter ABI remains the lower-overhead path for
+native consumers that cannot afford Perl object and byte-buffer round trips.
+It was not modified by the attached-transport feature.
