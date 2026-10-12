@@ -2,6 +2,8 @@ package Unblock::WebSocket::Handshake;
 
 use strict;
 use warnings;
+
+our $VERSION = '0.02';
 use Carp qw(croak);
 use Digest::SHA qw(sha1);
 use MIME::Base64 qw(decode_base64 encode_base64);
