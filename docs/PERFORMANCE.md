@@ -135,7 +135,7 @@ It uses a minimal host accepting complete buffers immediately, payloads of
 is available. The workload deliberately isolates outgoing message framing and
 buffer handoff; it is not an end-to-end network latency test.
 
-Run it from the built distribution:
+Run it from a built repository checkout (bench/ is not shipped to CPAN):
 
     perl -Mblib bench/attached-path.pl 10000
 
