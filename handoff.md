@@ -523,3 +523,63 @@ Next release action:
 1. tag version 0.01;
 2. create the GitHub release;
 3. upload Unblock-WebSocket-0.01 to CPAN.
+
+
+## API modernization feature branch (2026-10-11)
+
+Branch: feature/attached-transport-http-handoff
+Base main commit: 5c63c682c318be4cbfadeb11e207ad67eaaed4ac
+
+Scope: WebSocket repository only. No changes to HTTP1, HTTP2, HTTP3,
+Uniform::HTTP, or unified Unblock::HTTP. Main remains unchanged. Native
+ABI/include/unblock_websocket_native.h and the vendored protocol engine are
+unchanged.
+
+Implemented:
+
+- Optional transport object for established Client and Server, implementing
+  unblock_send(bytes), unblock_finish(), unblock_abort(reason).
+- Strong ownership remains with the host; WebSocket holds a weak reference.
+- Automatic output from methods and callbacks, with no recursive host sends.
+- Whole-buffer acceptance; false unblock_send means accepted but congested.
+- Explicit resume_output and transport_error, separate producer on_drain.
+- No attached output() access and no compatibility aliasing.
+- Host finish waits for WebSocket Close receipt and output handoff; unexpected
+  EOF or transport failure aborts. Manual interface remains intact.
+- Regression t/34-attached-transport.t covers Perl/native, compressed messages,
+  congestion, delayed output, Close order, host exceptions, and EOF.
+- Optional real HTTP1 integration t/35-http1-handoff.t checks Upgrade/101,
+  on_switch and post-upgrade remainder preservation.
+- Optional real HTTP2 integration t/36-http2-handoff.t exercises Extended
+  CONNECT, stream-only WebSocket traffic and simultaneous ordinary request.
+- Optional live HTTP3 author test xt/http3-handoff.t uses Net::QUIC/UDP/TLS.
+- Repository-only bench/attached-path.pl compares manual and attached output
+  by backend. Current workflow records 5000-iteration measurements.
+- README, public POD, Changes, docs/INTEGRATION.md and docs/PERFORMANCE.md
+  updated; MANIFEST ships normal regressions/docs, excludes handoff and xt.
+
+Verification checkpoint:
+
+- Test workflow run 38189101744 passed across Linux 5.16, Linux latest,
+  macOS latest and Windows Strawberry, including distribution checks.
+- The Linux optional integration step in that run installed real HTTP1 and
+  HTTP2 engines; job logs confirm t/35 and t/36 executed and passed.
+- Latest feature commits still require final green CI; H3 live author test
+  is experimental and initially marked continue-on-error pending verification.
+- The existing Autobahn conformance workflow may be cancelled/restarted by
+  subsequent pushes. Do not claim a new complete result until it finishes.
+
+Before merge/release:
+
+1. Resolve real H3 integration test outcome and ensure it is not a silent skip.
+2. Review attached versus manual benchmark values and profile unexpected cost.
+3. Ensure newest commit passes CI, POD and disttest, plus full Autobahn.
+4. Audit tests, docs, packaging, Changes and version for a future release.
+5. Request explicit user approval before merging to main or releasing to CPAN.
+
+The HTTP3 QUIC path is transaction-scoped. Its host bridge must queue its
+body write operations so H3/QUIC is not reentered from parser callbacks;
+flow-control congestion maps into the whole-buffer attached contract.
+
+The unified HTTP Transaction->accept_websocket() convenience method is not
+part of this repository and was not implemented here.
