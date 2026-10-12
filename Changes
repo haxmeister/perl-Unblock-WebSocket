@@ -2,30 +2,22 @@ Revision history for Unblock-WebSocket
 
 0.02  (unreleased)
 
-    - Merge attached transport support for Client and Server.
-    - Deliver protocol output to the host automatically with explicit
-      congestion, resume and graceful finish/abort handling.
-    - Keep the manual output API and private native ABI unchanged.
-    - Add integration regressions for HTTP/1.1 Upgrade and HTTP/2
-      Extended CONNECT, and live HTTP/3 QUIC/TLS coverage in CI.
-    - Run Autobahn client and server conformance plus Linux, macOS
-      and Windows test matrices.
-    - Rewrite README, integration guide and public POD for a simpler
-      first-use experience.
-    - Add a runnable handshake-to-message example and exercise all
-      three memory examples in CI.
-    - Give every public package an explicit matching release version.
-
-Previously unreleased feature work
-
-    - Add optional attached-transport output for established Client and Server.
-    - Define whole-buffer acceptance, congestion resume, and host teardown.
-    - Keep manual output and the native ABI unchanged.
-    - Separate producer on_drain from host write readiness and reject recursive
-      host-send dispatch.
-    - Add backend-parity lifecycle, compression and congestion regressions.
-    - Add optional real HTTP1 Upgrade and HTTP2 Extended CONNECT tests.
-    - Document HTTP1/2/3 handoffs and ownership boundaries.
+    - Add an attached host transport to established Client and Server.
+      Keep the manual output mode and private native ABI unchanged.
+    - Define complete-buffer acceptance, congestion/resume signals,
+      producer on_drain and graceful finish/abort ownership.
+    - Prevent recursive output delivery into host send callbacks.
+    - Add regressions for native and Perl backends, compression,
+      Close handling, congestion, EOF and transport errors.
+    - Add HTTP/1.1 Upgrade and HTTP/2 Extended CONNECT integration
+      tests; exercise a live HTTP/3 QUIC/TLS handoff in CI.
+    - Keep the Linux, macOS and Windows matrix, distribution tests
+      and full Autobahn conformance workflow.
+    - Rewrite the README, transport integration guide, and public POD
+      around simple client/server examples and clear ownership rules.
+    - Add a runnable opening-handshake example and run all three
+      memory-only examples during CI.
+    - Give every public package an explicit matching 0.02 version.
 
 0.01  2026-10-04
 
