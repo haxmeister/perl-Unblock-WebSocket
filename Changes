@@ -1,5 +1,16 @@
 Revision history for Unblock-WebSocket
 
+Unreleased (feature branch)
+
+    - Add optional attached-transport output for established Client and Server.
+    - Define whole-buffer acceptance, congestion resume, and host teardown.
+    - Keep manual output and the native ABI unchanged.
+    - Separate producer on_drain from host write readiness and reject recursive
+      host-send dispatch.
+    - Add backend-parity lifecycle, compression and congestion regressions.
+    - Add optional real HTTP1 Upgrade and HTTP2 Extended CONNECT tests.
+    - Document HTTP1/2/3 handoffs and ownership boundaries.
+
 0.01  2026-10-04
 
     - Begin standalone platform- and event-loop-neutral WebSocket engine.
