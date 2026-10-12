@@ -171,6 +171,14 @@ No Unblock::HTTP1, ::HTTP2, ::HTTP3 or Net::QUIC distribution is a mandatory
 WebSocket runtime dependency. Integration regressions run when their optional
 engines are installed.
 
+## Runnable examples
+
+examples/memory-attached.pl shows a host with all three unblock_* methods,
+with transport-integration code separate from application callbacks.
+examples/memory-manual.pl uses the unchanged want_write()/output() loop.
+Both programs run without an event framework, socket or HTTP engine.
+The examples assume the opening HTTP handshake was already completed.
+
 ## Further reading
 
 See the public POD for Client, Server, Handshake and the main
