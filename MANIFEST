@@ -23,6 +23,7 @@ lib/Unblock/WebSocket/_Native.pm
 lib/Unblock/WebSocket/_Random.pm
 lib/Unblock/WebSocket/_UTF8.pm
 t/00-load.t
+t/01-versions.t
 t/10-frame.t
 t/11-native.t
 t/12-native-errors.t
