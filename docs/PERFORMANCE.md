@@ -149,3 +149,22 @@ not an inherent speed improvement over direct native buffer ownership.
 The existing private native adapter ABI remains the lower-overhead path for
 native consumers that cannot afford Perl object and byte-buffer round trips.
 It was not modified by the attached-transport feature.
+
+
+### First attached-path measurement (2026-10-11)
+
+Measured on the same GitHub-hosted Linux job (5000 iterations each, same
+process, no network or compression). Numbers are development observations,
+not stable promises or a replacement for full native-adapter benchmarking.
+
+    backend  size    manual msg/s   attached msg/s   difference
+    perl      64 B       172426           150757       -12.6%
+    perl    1024 B       167853           148809       -11.3%
+    native    64 B       260280           221867       -14.8%
+    native  1024 B       254803           216328       -15.1%
+
+Attached mode does introduce measurable extra Perl dispatch and state work
+versus the shortest manual output loop. It is intended for easy host
+integrations; latency-sensitive native adapters should use the existing
+private native ABI. More runs and a workload with real network scheduling
+are needed before treating these ratios as general performance results.
