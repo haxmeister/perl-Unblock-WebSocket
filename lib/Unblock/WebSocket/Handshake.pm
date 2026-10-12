@@ -869,6 +869,48 @@ __END__
 
 Unblock::WebSocket::Handshake - WebSocket handshake helpers using Uniform::HTTP
 
+=head1 SYNOPSIS
+
+The opening handshake happens over HTTP, before any WebSocket messages.
+
+Client:
+
+    use Unblock::WebSocket::Handshake;
+    use Unblock::WebSocket::Client;
+
+    my ($handshake, $request) =
+        Unblock::WebSocket::Handshake->client_request(
+            'wss://example.com/chat',
+            http_version => '1.1',
+        );
+
+    # Your HTTP client sends $request and receives $response.
+    $handshake->validate_client_response($response);
+
+    my $ws = Unblock::WebSocket::Client->new(
+        %{ $handshake->connection_options },
+        on_message => sub { ... },
+    );
+
+Server:
+
+    use Unblock::WebSocket::Handshake;
+    use Unblock::WebSocket::Server;
+
+    my $handshake =
+        Unblock::WebSocket::Handshake->server_accept($request);
+    my $response = $handshake->server_response;
+
+    # Your HTTP server sends $response and switches the connection.
+    my $ws = Unblock::WebSocket::Server->new(
+        %{ $handshake->connection_options },
+        on_message => sub { ... },
+    );
+
+These are the WebSocket-specific steps, not a complete HTTP client or
+server. See C<examples/handshake-memory.pl> for an executable
+in-memory handshake and message exchange.
+
 =head1 DESCRIPTION
 
 This module owns WebSocket-specific HTTP handshake rules.
@@ -876,7 +918,11 @@ This module owns WebSocket-specific HTTP handshake rules.
 It does not send HTTP and it does not own the HTTP connection. Instead it
 creates and validates L<Uniform::HTTP> request and response objects.
 
-Three bootstrap forms are supported:
+An invalid handshake throws an exception. The surrounding HTTP
+application decides how to send an HTTP error response or close the
+connection.
+
+Three opening handshake forms are supported:
 
 =over
 
@@ -899,6 +945,8 @@ Create a request:
         );
 
 Send C<$request> through the HTTP implementation of your choice.
+The default HTTP version is 1.1. The URL scheme must be C<ws> or
+C<wss>; the helper does not open the destination.
 
 After receiving the HTTP response:
 
@@ -962,7 +1010,11 @@ Build the HTTP response:
 
     my $response = $handshake->server_response;
 
-Send that response through your HTTP implementation.
+Send that response through your HTTP implementation. For HTTP/1.1,
+the accepted response has status 101 and the entire connection changes
+from HTTP to WebSocket. For HTTP/2 and HTTP/3, the accepted response is
+200 and only that streaming transaction becomes WebSocket.
+Do not feed HTTP handshake bytes to the established WebSocket engine.
 
 Then create the established server engine:
 
@@ -988,6 +1040,12 @@ The server may supply a compression policy instead of a simple true value:
         Unblock::WebSocket::Handshake->client_request($url, %options);
 
 Creates a client handshake and a canonical Uniform::HTTP request.
+The C<http_version> option accepts C<1.1>, C<2>, or C<3>.
+Optional C<subprotocols> is an array reference of names to offer.
+C<permessage_deflate> offers compression. C<origin> adds the Origin
+header. C<headers> adds extra name/value header pairs.
+For HTTP/1.1 testing, C<key> can supply a valid fixed
+Sec-WebSocket-Key; normal calls generate a random key.
 
 =head2 server_accept
 
@@ -995,6 +1053,10 @@ Creates a client handshake and a canonical Uniform::HTTP request.
         Unblock::WebSocket::Handshake->server_accept($request, %options);
 
 Validates an incoming WebSocket handshake request.
+Optional C<subprotocols> lists protocols the server supports;
+C<permessage_deflate> enables or configures compression. The result
+records the negotiated values used by C<server_response()> and
+C<connection_options()>.
 
 =head2 server_response
 
@@ -1007,7 +1069,9 @@ handshake.
 
     $handshake->validate_client_response($response);
 
-Validates a server response to a client handshake.
+Validates a server response to a client handshake. Throws on a
+rejected, malformed, or unexpected HTTP response. Call this before
+creating a WebSocket::Client object or sending WebSocket messages.
 
 =head2 connection_options
 
