@@ -1,6 +1,22 @@
 Revision history for Unblock-WebSocket
 
-Unreleased (feature branch)
+0.02  (unreleased)
+
+    - Merge attached transport support for Client and Server.
+    - Deliver protocol output to the host automatically with explicit
+      congestion, resume and graceful finish/abort handling.
+    - Keep the manual output API and private native ABI unchanged.
+    - Add integration regressions for HTTP/1.1 Upgrade and HTTP/2
+      Extended CONNECT, and live HTTP/3 QUIC/TLS coverage in CI.
+    - Run Autobahn client and server conformance plus Linux, macOS
+      and Windows test matrices.
+    - Rewrite README, integration guide and public POD for a simpler
+      first-use experience.
+    - Add a runnable handshake-to-message example and exercise all
+      three memory examples in CI.
+    - Give every public package an explicit matching release version.
+
+Previously unreleased feature work
 
     - Add optional attached-transport output for established Client and Server.
     - Define whole-buffer acceptance, congestion resume, and host teardown.
