@@ -3,6 +3,7 @@ package Unblock::WebSocket::_Engine;
 use strict;
 use warnings;
 use Carp qw(croak);
+use Scalar::Util qw(blessed weaken);
 
 use Unblock::WebSocket ();
 use Unblock::WebSocket::_Deflate ();
@@ -66,6 +67,15 @@ sub _new {
     my $role = delete $option{role};
     croak 'new(): role must be client or server'
         unless defined($role) && ($role eq 'client' || $role eq 'server');
+
+    my $transport = delete $option{transport};
+    if (defined $transport) {
+        croak 'new(): transport must be an object' unless blessed($transport);
+        for my $method (qw(unblock_send unblock_finish unblock_abort)) {
+            croak "new(): transport must implement $method()"
+                unless $transport->can($method);
+        }
+    }
 
     my $max_message_size = exists($option{max_message_size})
         ? delete($option{max_message_size}) : 16 * 1024 * 1024;
@@ -166,7 +176,15 @@ sub _new {
         closed           => 0,
         failed           => 0,
         driving          => 0,
+        transport          => $transport,
+        transport_attached => defined($transport) ? 1 : 0,
+        transport_blocked  => 0,
+        transport_syncing  => 0,
+        transport_finished => 0,
+        transport_aborted  => 0,
+        transport_producer_blocked => 0,
     }, $class;
+    weaken($self->{transport}) if defined $transport;
     return $self;
 }
 
@@ -203,13 +221,115 @@ sub _invoke {
     return;
 }
 
+sub _notify_drain {
+    my ($self) = @_;
+    return if $self->{closed} || $self->{transport_blocked};
+    return if length($self->{output}) > $self->{low_water};
+    return unless $self->{output_blocked}
+        || $self->{transport_producer_blocked};
+    $self->{output_blocked} = 0;
+    $self->{transport_producer_blocked} = 0;
+    $self->_invoke('on_drain');
+    return;
+}
+
+# All bytes passed to unblock_send() are accepted or the host must throw.
+# A false return signals congestion after acceptance, never a partial write.
+sub _transport_sync {
+    my ($self) = @_;
+    return unless $self->{transport_attached};
+    return if $self->{driving} || $self->{transport_syncing};
+    return if $self->{transport_aborted} || $self->{transport_finished};
+    return if $self->{transport_blocked};
+
+    my $host = $self->{transport};
+    return $self->_transport_abort('WebSocket transport was destroyed')
+        unless $host;
+
+    {
+        local $self->{transport_syncing} = 1;
+        while (!$self->{transport_blocked} && !$self->{transport_aborted}) {
+            if (length($self->{output})) {
+                my $bytes = $self->{output};
+                $self->{output} = '';
+                my $ready;
+                my $ok = eval { $ready = $host->unblock_send($bytes); 1 };
+                unless ($ok) {
+                    $self->_transport_abort("$@" || 'unblock_send() failed');
+                    last;
+                }
+                $self->{transport_blocked} = 1
+                    if defined($ready) && !$ready;
+            }
+            $self->_notify_drain unless $self->{transport_blocked};
+            last unless length($self->{output});
+        }
+    }
+
+    # finish() must preserve the host's already accepted write queue.
+    # Sending our Close frame alone is not completion of the handshake.
+    if (!$self->{transport_aborted} && !$self->{transport_finished}
+        && !$self->{transport_blocked} && !length($self->{output})
+        && ($self->{received_close} || $self->{failed})) {
+        $self->{transport_finished} = 1;
+        my $ok = eval { $host->unblock_finish(); 1 };
+        $self->_transport_abort("$@" || 'unblock_finish() failed')
+            unless $ok;
+    }
+    return;
+}
+
+sub resume_output {
+    my ($self) = @_;
+    croak 'resume_output(): no attached transport'
+        unless $self->{transport_attached};
+    croak 'resume_output(): cannot be called recursively from a callback'
+        if $self->{driving} || $self->{transport_syncing};
+    return $self if $self->{transport_aborted} || $self->{transport_finished};
+    $self->{transport_blocked} = 0;
+    $self->_transport_sync;
+    return $self;
+}
+
+sub _transport_abort {
+    my ($self, $reason) = @_;
+    return if $self->{transport_aborted};
+    $reason = 'transport error' unless defined($reason) && length($reason);
+    $reason = "$reason";
+    $self->{transport_aborted} = 1;
+    $self->{closed} = 1;
+    $self->{failed} = 1;
+    $self->{output} = '';
+    $self->_invoke('on_error', $reason);
+    $self->_invoke('on_close', undef, $reason) unless $self->{received_close};
+    if (my $host = $self->{transport}) {
+        eval { $host->unblock_abort($reason) };
+    }
+    return;
+}
+
+sub transport_error {
+    my ($self, $reason) = @_;
+    return $self if $self->{transport_aborted} || $self->{closed};
+    $self->_transport_abort($reason);
+    return $self;
+}
+
 sub _queue_wire {
     my ($self, $bytes) = @_;
-    return if !defined($bytes) || !length($bytes);
+    return 1 if !defined($bytes) || !length($bytes);
     $self->{output} .= $bytes;
-    $self->{output_blocked} = 1
-        if length($self->{output}) >= $self->{high_water};
-    return length($self->{output}) < $self->{high_water} ? 1 : 0;
+    $self->_transport_sync if $self->{transport_attached};
+    my $ready = length($self->{output}) < $self->{high_water}
+        && !$self->{transport_blocked}
+        && !$self->{transport_aborted};
+    unless ($ready) {
+        $self->{output_blocked} = 1
+            if length($self->{output}) >= $self->{high_water};
+        $self->{transport_producer_blocked} = 1
+            if $self->{transport_blocked};
+    }
+    return $ready ? 1 : 0;
 }
 
 sub _sync_native_output {
@@ -364,8 +484,13 @@ sub close {
 
 sub abort {
     my ($self) = @_;
-    $self->{closed} = 1;
-    $self->{output} = '';
+    if ($self->{transport_attached}) {
+        $self->_transport_abort('WebSocket aborted');
+    }
+    else {
+        $self->{closed} = 1;
+        $self->{output} = '';
+    }
     return $self;
 }
 
@@ -373,15 +498,22 @@ sub input_eof {
     my ($self) = @_;
     return $self if $self->{closed};
     croak 'input_eof(): cannot be called recursively from a callback'
-        if $self->{driving};
+        if $self->{driving} || $self->{transport_syncing};
+    if ($self->{transport_attached} && !$self->{received_close}) {
+        $self->_transport_abort('transport EOF without WebSocket Close');
+        return $self;
+    }
     $self->{closed} = 1;
     $self->_invoke('on_close', undef, 'transport EOF')
         unless $self->{received_close};
+    $self->_transport_sync if $self->{transport_attached};
     return $self;
 }
 
 sub output {
     my ($self, $max) = @_;
+    croak 'output(): manual output is unavailable with an attached transport'
+        if $self->{transport_attached};
     croak 'output(): cannot be called recursively from a callback'
         if $self->{driving};
     return '' unless length $self->{output};
@@ -394,11 +526,7 @@ sub output {
     }
 
     my $bytes = substr($self->{output}, 0, $take, '');
-    if ($self->{output_blocked}
-        && length($self->{output}) <= $self->{low_water}) {
-        $self->{output_blocked} = 0;
-        $self->_invoke('on_drain');
-    }
+    $self->_notify_drain;
     return $bytes;
 }
 
@@ -406,7 +534,7 @@ sub input {
     my ($self, $bytes) = @_;
     croak 'input(): WebSocket is closed' if $self->{closed};
     croak 'input(): cannot be called recursively from a callback'
-        if $self->{driving};
+        if $self->{driving} || $self->{transport_syncing};
 
     if ($self->{backend} eq 'native') {
         croak 'input(): bytes must be a scalar' if ref($bytes);
@@ -437,25 +565,27 @@ sub input {
             $self->_invoke('on_error', $error);
         }
         $self->_sync_native_output;
+        $self->_transport_sync if $self->{transport_attached};
         return length($copy);
     }
 
     my $count = $self->{parser}->input($bytes);
-    local $self->{driving} = 1;
-
-    while (!$self->{closed}) {
-        my $frame;
-        my $ok = eval { $frame = $self->{parser}->next_frame; 1 };
-        if (!$ok) {
-            my $error = $@ || 'WebSocket frame parse failure';
-            my $code = $error =~ /exceeds configured limit/ ? 1009 : 1002;
-            $self->_fail($error, $code);
-            last;
+    {
+        local $self->{driving} = 1;
+        while (!$self->{closed}) {
+            my $frame;
+            my $ok = eval { $frame = $self->{parser}->next_frame; 1 };
+            if (!$ok) {
+                my $error = $@ || 'WebSocket frame parse failure';
+                my $code = $error =~ /exceeds configured limit/ ? 1009 : 1002;
+                $self->_fail($error, $code);
+                last;
+            }
+            last unless $frame;
+            $self->_handle_frame($frame);
         }
-        last unless $frame;
-        $self->_handle_frame($frame);
     }
-
+    $self->_transport_sync if $self->{transport_attached};
     return $count;
 }
 
