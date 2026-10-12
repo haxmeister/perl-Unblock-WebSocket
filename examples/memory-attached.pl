@@ -10,33 +10,33 @@ use Unblock::WebSocket::Server;
 
 package Example::Host;
 
-    sub new { bless { outgoing => [], finished => 0 }, shift }
+sub new { bless { outgoing => [], finished => 0 }, shift }
 
-    sub unblock_send {
-        my ($self, $bytes) = @_;
-        push @{ $self->{outgoing} }, $bytes;
-        return; # Entire buffer accepted. No congestion signal.
-    }
+sub unblock_send {
+    my ($self, $bytes) = @_;
+    push @{ $self->{outgoing} }, $bytes;
+    return; # Entire buffer accepted. No congestion signal.
+}
 
-    sub unblock_finish {
-        ++$_[0]{finished};
-        return;
-    }
+sub unblock_finish {
+    ++$_[0]{finished};
+    return;
+}
 
-    sub unblock_abort {
-        my ($self, $reason) = @_;
-        die "transport aborted: $reason";
-    }
+sub unblock_abort {
+    my ($self, $reason) = @_;
+    die "transport aborted: $reason";
+}
 
-    sub deliver_to {
-        my ($self, $peer) = @_;
-        my $count = 0;
-        for my $bytes (splice @{ $self->{outgoing} }) {
-            $peer->input($bytes);
-            ++$count;
-        }
-        return $count;
+sub deliver_to {
+    my ($self, $peer) = @_;
+    my $count = 0;
+    for my $bytes (splice @{ $self->{outgoing} }) {
+        $peer->input($bytes);
+        ++$count;
     }
+    return $count;
+}
 package main;
 
 # ------------------------------------------------------------
