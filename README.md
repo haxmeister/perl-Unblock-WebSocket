@@ -126,6 +126,9 @@ after the peer Close arrives and the engine has handed off its pending bytes.
 Unexpected EOF or transport_error() instead aborts the attached transport.
 
 See docs/INTEGRATION.md for the two modes and the HTTP1/2/3 handoffs.
+Runnable in-memory examples are in examples/memory-attached.pl and
+examples/memory-manual.pl. Each marks the boundary between transport code
+and application code.
 
 The default maximum application message size is 16 MiB and applies after
 permessage-deflate decompression.
