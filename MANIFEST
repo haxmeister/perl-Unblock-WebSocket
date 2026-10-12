@@ -8,6 +8,8 @@ WebSocket.xs
 docs/ARCHITECTURE.md
 docs/INTEGRATION.md
 docs/PERFORMANCE.md
+examples/memory-attached.pl
+examples/memory-manual.pl
 include/unblock_websocket_native.h
 lib/Unblock/WebSocket.pm
 lib/Unblock/WebSocket/Client.pm
