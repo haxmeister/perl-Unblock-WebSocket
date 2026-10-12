@@ -523,3 +523,77 @@ Next release action:
 1. tag version 0.01;
 2. create the GitHub release;
 3. upload Unblock-WebSocket-0.01 to CPAN.
+
+
+## API modernization feature branch (2026-10-11)
+
+Branch: feature/attached-transport-http-handoff
+Base main commit: 5c63c682c318be4cbfadeb11e207ad67eaaed4ac
+
+Scope: WebSocket repository only. No changes to HTTP1, HTTP2, HTTP3,
+Uniform::HTTP, or unified Unblock::HTTP. Main remains unchanged. Native
+ABI/include/unblock_websocket_native.h and the vendored protocol engine are
+unchanged.
+
+Implemented:
+
+- Optional transport object for established Client and Server, implementing
+  unblock_send(bytes), unblock_finish(), unblock_abort(reason).
+- Strong ownership remains with the host; WebSocket holds a weak reference.
+- Automatic output from methods and callbacks, with no recursive host sends.
+- Whole-buffer acceptance; false unblock_send means accepted but congested.
+- Explicit resume_output and transport_error, separate producer on_drain.
+- No attached output() access and no compatibility aliasing.
+- Host finish waits for WebSocket Close receipt and output handoff; unexpected
+  EOF or transport failure aborts. Manual interface remains intact.
+- Regression t/34-attached-transport.t covers Perl/native, compressed messages,
+  congestion, delayed output, Close order, host exceptions, and EOF.
+- Optional real HTTP1 integration t/35-http1-handoff.t checks Upgrade/101,
+  on_switch and post-upgrade remainder preservation.
+- Optional real HTTP2 integration t/36-http2-handoff.t exercises Extended
+  CONNECT, stream-only WebSocket traffic and simultaneous ordinary request.
+- Optional live HTTP3 author test xt/http3-handoff.t uses Net::QUIC/UDP/TLS.
+- Repository-only bench/attached-path.pl compares manual and attached output
+  by backend. Current workflow records 5000-iteration measurements.
+- README, public POD, Changes, docs/INTEGRATION.md and docs/PERFORMANCE.md
+  updated; MANIFEST ships normal regressions/docs, excludes handoff and xt.
+
+Verification checkpoint:
+
+- Test workflow run 38189101744 passed across Linux 5.16, Linux latest,
+  macOS latest and Windows Strawberry, including distribution checks.
+- The Linux optional integration step in that run installed real HTTP1 and
+  HTTP2 engines; job logs confirm t/35 and t/36 executed and passed.
+- Live HTTP3 QUIC integration passed in Linux CI run 38189597082,
+  job 114619284918: installed Alien::nghttp3 0.01, Net::QUIC 0.04, and
+  Unblock::HTTP3 0.12 cloned from main. After configuring OpenSSL certificate
+  generation, xt/http3-handoff.t ran 14 assertions and passed. The H3 CI
+  step is now a required check, not continue-on-error.
+- Runnable examples/memory-attached.pl and examples/memory-manual.pl
+  are shipped and smoke-tested in Linux CI run 38189637530.
+- Manual versus attached output same-run 5000-iteration benchmarks:
+  Perl 64 B: 172426 versus 150757 messages/s; 1024 B: 167853 versus
+  148809. Native 64 B: 260280 versus 221867; 1024 B: 254803 versus
+  216328. Attached path costs roughly 11-15% in this framing/handoff
+  microbenchmark. Native ABI is unmodified.
+- Compare against main reports branch strictly ahead, no deleted files,
+  no upstream changes. Entire changed set is in WebSocket repository only.
+- The existing Autobahn conformance workflow was still running at this
+  checkpoint. Do not claim a new complete result until it finishes.
+
+Before merge/release:
+
+1. Confirm the newest feature commit passes required HTTP3 CI,
+   four-platform tests, POD, distcheck/disttest and examples.
+2. Review complete Autobahn conformance, especially compression cases.
+3. Treat attached path as measured convenience; native ABI stays the
+   performance-recovery route. Continue broader benchmarking as needed.
+4. Audit documentation, Changes and version for a future release.
+5. Request explicit user approval before merging to main or releasing to CPAN.
+
+The HTTP3 QUIC path is transaction-scoped. Its host bridge must queue its
+body write operations so H3/QUIC is not reentered from parser callbacks;
+flow-control congestion maps into the whole-buffer attached contract.
+
+The unified HTTP Transaction->accept_websocket() convenience method is not
+part of this repository and was not implemented here.

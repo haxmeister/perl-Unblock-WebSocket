@@ -63,6 +63,43 @@ jobs:
           perl Makefile.PL
           perl -MConfig -e 'system($Config{make}, "test"); exit($? >> 8)'
 
+      - name: Test optional HTTP1 and HTTP2 handoffs
+        if: matrix.os == 'ubuntu-latest' && matrix.perl == 'latest'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libnghttp2-dev pkg-config
+          cpanm --notest Unblock::HTTP1 Unblock::HTTP2
+          prove -b t/35-http1-handoff.t t/36-http2-handoff.t
+
+      - name: Exercise HTTP3 QUIC handoff
+        if: matrix.os == 'ubuntu-latest' && matrix.perl == 'latest'
+        shell: bash
+        run: |
+          cpanm --notest Alien::nghttp3@0.01 Uniform::HTTP@0.06 Net::QUIC@0.04 Test2::V0
+          git clone --depth 1 https://github.com/haxmeister/perl-Unblock-HTTP3.git /tmp/unblock-http3-current
+          cpanm --notest /tmp/unblock-http3-current
+          OPENSSL_CONF=/etc/ssl/openssl.cnf openssl req -x509 -newkey rsa:2048 -sha256 -nodes -days 1 \
+            -keyout /tmp/unblock-ws-h3-key.pem \
+            -out /tmp/unblock-ws-h3-cert.pem \
+            -subj '/CN=localhost' -addext 'subjectAltName=DNS:localhost'
+          UNBLOCK_WS_H3_CERT=/tmp/unblock-ws-h3-cert.pem \
+          UNBLOCK_WS_H3_KEY=/tmp/unblock-ws-h3-key.pem \
+            prove -b xt/http3-handoff.t
+
+      - name: Benchmark manual and attached output
+        if: matrix.os == 'ubuntu-latest' && matrix.perl == 'latest'
+        shell: bash
+        run: |
+          perl -Mblib bench/attached-path.pl 5000
+
+      - name: Smoke example programs
+        if: matrix.os == 'ubuntu-latest' && matrix.perl == 'latest'
+        shell: bash
+        run: |
+          perl -Mblib examples/memory-attached.pl
+          perl -Mblib examples/memory-manual.pl
+
       - name: Check POD syntax
         if: runner.os != 'Windows'
         shell: bash

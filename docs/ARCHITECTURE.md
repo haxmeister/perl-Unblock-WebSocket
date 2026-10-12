@@ -56,7 +56,13 @@ Transport EOF is explicit:
 
     $ws->input_eof;
 
-This is the canonical public integration contract. It must remain usable with
+This is the manual public integration contract. Attached transports instead
+implement unblock_send(), unblock_finish(), and unblock_abort() and receive
+all output automatically. The engine holds their object weakly; a false
+unblock_send() return means the entire buffer was accepted and the host is
+congested until resume_output(). Calling output() in attached mode is an error.
+
+Both contracts must remain usable with
 Linux::Event, IO::Async, AnyEvent, Mojolicious, blocking sockets, in-memory
 tests, HTTP/2 streams, HTTP/3 streams, and other ordered byte transports.
 

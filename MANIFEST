@@ -6,7 +6,10 @@ MANIFEST.SKIP
 README.md
 WebSocket.xs
 docs/ARCHITECTURE.md
+docs/INTEGRATION.md
 docs/PERFORMANCE.md
+examples/memory-attached.pl
+examples/memory-manual.pl
 include/unblock_websocket_native.h
 lib/Unblock/WebSocket.pm
 lib/Unblock/WebSocket/Client.pm
@@ -42,6 +45,9 @@ t/30-handshake.t
 t/31-handshake-rejections.t
 t/32-uniform-fastpath.t
 t/33-permessage-deflate-handshake.t
+t/34-attached-transport.t
+t/35-http1-handoff.t
+t/36-http2-handoff.t
 vendor/bq_websocket/LICENSE
 vendor/bq_websocket/README.md
 vendor/bq_websocket/bq_websocket.c
