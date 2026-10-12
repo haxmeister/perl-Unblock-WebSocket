@@ -80,7 +80,7 @@ jobs:
           cpanm --notest Alien::nghttp3@0.01 Uniform::HTTP@0.06 Net::QUIC@0.04 Test2::V0
           git clone --depth 1 https://github.com/haxmeister/perl-Unblock-HTTP3.git /tmp/unblock-http3-current
           cpanm --notest /tmp/unblock-http3-current
-          openssl req -x509 -newkey rsa:2048 -sha256 -nodes -days 1 \
+          OPENSSL_CONF=/etc/ssl/openssl.cnf openssl req -x509 -newkey rsa:2048 -sha256 -nodes -days 1 \
             -keyout /tmp/unblock-ws-h3-key.pem \
             -out /tmp/unblock-ws-h3-cert.pem \
             -subj '/CN=localhost' -addext 'subjectAltName=DNS:localhost'
