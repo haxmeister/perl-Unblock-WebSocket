@@ -49,7 +49,8 @@ The distribution supports:
 =back
 
 The public protocol API remains bytes in and bytes out. Applications do not
-need to work with WebSocket frame objects.
+need to work with WebSocket frame objects. Output can be drained manually or
+handed to an optional attached transport automatically.
 
 =head1 NATIVE BACKEND
 
@@ -84,6 +85,13 @@ Output low-water mark. The default is 32768 bytes.
 
 Negotiated RFC 7692 parameters. Normally this comes from
 L<Unblock::WebSocket::Handshake/connection_options>.
+
+=item C<transport>
+
+Optional host transport object implementing C<unblock_send($bytes)>,
+C<unblock_finish()> and C<unblock_abort($reason)>. The host owns the socket,
+TLS, event loop and its ordered output queue. An attached engine holds a weak
+reference to the host. Without this option, the engine uses manual output.
 
 =item C<backend>
 
@@ -129,8 +137,9 @@ Called for protocol or callback errors.
 
 =item C<on_drain>
 
-Called after buffered output falls back to or below C<low_water> after reaching
-the high-water state.
+Called when a producer that saw a false send return can resume. In attached
+mode, this also waits for host congestion to clear via C<resume_output()>.
+This is not a socket writable callback.
 
 =back
 
@@ -148,8 +157,21 @@ Report transport EOF.
 
 =item C<output([$maximum])>
 
-Remove and return generated transport bytes. An optional positive maximum limits
-the returned chunk size.
+Remove and return generated transport bytes in manual mode. An optional
+positive maximum limits the returned chunk size. Calling this with an attached
+transport is an error.
+
+=item C<resume_output()>
+
+With an attached transport, clear a congestion indication after the host can
+accept more bytes. The host must call this after its C<unblock_send()> returned
+false. Calling it in manual mode is an error.
+
+=item C<transport_error($reason)>
+
+Report a broken transport or TLS connection. Aborts immediately, discards
+unaccepted protocol output and, in attached mode, calls C<unblock_abort()>.
+This is distinct from a peer WebSocket Close frame.
 
 =item C<want_write()>
 
@@ -208,7 +230,15 @@ Returns the negotiated compression parameters, or undef.
 
 C<send_text()>, C<send_binary()>, and C<ping()> accept their bytes even when
 the output high-water mark is reached. A false return means the producer should
-pause until C<on_drain> runs.
+pause until C<on_drain> runs. In attached mode, false may also mean that the
+host accepted an entire buffer but reported congestion. Host send methods
+must accept all bytes or throw, and must drain their own write queues before
+a graceful C<unblock_finish()> shuts the connection.
+
+C<close()> queues a WebSocket Close frame; it does not immediately terminate
+the transport. The peer Close response, outstanding output and any host
+congestion are handled before graceful finish. Unexpected EOF or a transport
+error aborts an attached host. See C<docs/INTEGRATION.md> in the repository.
 
 =head1 LICENSE
 
