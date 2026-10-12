@@ -564,17 +564,31 @@ Verification checkpoint:
   macOS latest and Windows Strawberry, including distribution checks.
 - The Linux optional integration step in that run installed real HTTP1 and
   HTTP2 engines; job logs confirm t/35 and t/36 executed and passed.
-- Latest feature commits still require final green CI; H3 live author test
-  is experimental and initially marked continue-on-error pending verification.
-- The existing Autobahn conformance workflow may be cancelled/restarted by
-  subsequent pushes. Do not claim a new complete result until it finishes.
+- Live HTTP3 QUIC integration passed in Linux CI run 38189597082,
+  job 114619284918: installed Alien::nghttp3 0.01, Net::QUIC 0.04, and
+  Unblock::HTTP3 0.12 cloned from main. After configuring OpenSSL certificate
+  generation, xt/http3-handoff.t ran 14 assertions and passed. The H3 CI
+  step is now a required check, not continue-on-error.
+- Runnable examples/memory-attached.pl and examples/memory-manual.pl
+  are shipped and smoke-tested in Linux CI run 38189637530.
+- Manual versus attached output same-run 5000-iteration benchmarks:
+  Perl 64 B: 172426 versus 150757 messages/s; 1024 B: 167853 versus
+  148809. Native 64 B: 260280 versus 221867; 1024 B: 254803 versus
+  216328. Attached path costs roughly 11-15% in this framing/handoff
+  microbenchmark. Native ABI is unmodified.
+- Compare against main reports branch strictly ahead, no deleted files,
+  no upstream changes. Entire changed set is in WebSocket repository only.
+- The existing Autobahn conformance workflow was still running at this
+  checkpoint. Do not claim a new complete result until it finishes.
 
 Before merge/release:
 
-1. Resolve real H3 integration test outcome and ensure it is not a silent skip.
-2. Review attached versus manual benchmark values and profile unexpected cost.
-3. Ensure newest commit passes CI, POD and disttest, plus full Autobahn.
-4. Audit tests, docs, packaging, Changes and version for a future release.
+1. Confirm the newest feature commit passes required HTTP3 CI,
+   four-platform tests, POD, distcheck/disttest and examples.
+2. Review complete Autobahn conformance, especially compression cases.
+3. Treat attached path as measured convenience; native ABI stays the
+   performance-recovery route. Continue broader benchmarking as needed.
+4. Audit documentation, Changes and version for a future release.
 5. Request explicit user approval before merging to main or releasing to CPAN.
 
 The HTTP3 QUIC path is transaction-scoped. Its host bridge must queue its
