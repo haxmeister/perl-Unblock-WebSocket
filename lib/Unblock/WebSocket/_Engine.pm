@@ -180,6 +180,7 @@ sub _new {
         transport_attached => defined($transport) ? 1 : 0,
         transport_blocked  => 0,
         transport_syncing  => 0,
+        transport_in_send  => 0,
         transport_finished => 0,
         transport_aborted  => 0,
         transport_producer_blocked => 0,
@@ -253,7 +254,11 @@ sub _transport_sync {
                 my $bytes = $self->{output};
                 $self->{output} = '';
                 my $ready;
-                my $ok = eval { $ready = $host->unblock_send($bytes); 1 };
+                my $ok = eval {
+                    local $self->{transport_in_send} = 1;
+                    $ready = $host->unblock_send($bytes);
+                    1;
+                };
                 unless ($ok) {
                     $self->_transport_abort("$@" || 'unblock_send() failed');
                     last;
@@ -317,6 +322,8 @@ sub transport_error {
 
 sub _queue_wire {
     my ($self, $bytes) = @_;
+    croak 'WebSocket output cannot be generated from unblock_send()'
+        if $self->{transport_in_send};
     return 1 if !defined($bytes) || !length($bytes);
     $self->{output} .= $bytes;
     $self->_transport_sync if $self->{transport_attached};
@@ -464,6 +471,8 @@ sub _close_payload {
 
 sub close {
     my ($self, %option) = @_;
+    croak 'close(): cannot be called from unblock_send()'
+        if $self->{transport_in_send};
     return $self if $self->{closed} || $self->{sent_close};
     my $code = exists($option{code}) ? delete($option{code}) : 1000;
     my $reason = delete $option{reason};
