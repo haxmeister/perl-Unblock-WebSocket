@@ -94,6 +94,13 @@ jobs:
         run: |
           perl -Mblib bench/attached-path.pl 5000
 
+      - name: Smoke example programs
+        if: matrix.os == 'ubuntu-latest' && matrix.perl == 'latest'
+        shell: bash
+        run: |
+          perl -Mblib examples/memory-attached.pl
+          perl -Mblib examples/memory-manual.pl
+
       - name: Check POD syntax
         if: runner.os != 'Windows'
         shell: bash
