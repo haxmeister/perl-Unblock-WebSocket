@@ -1,18 +1,50 @@
 # Unblock::WebSocket handoff
 
-Last updated: 2026-10-04
+Last updated: 2026-10-12
+
+## Current release audit (read this first)
+
+- PR #1 merged attached transport and HTTP handoffs to main at 96254344.
+- Main is being prepared for Unblock::WebSocket 0.02; no GitHub release,
+  CPAN upload, or version tag has been published for 0.02.
+- Public Client, Server, Handshake and root package now all declare 0.02.
+- README was rewritten to teach installation, handshake, messages and
+  manual/attached output in that order. docs/INTEGRATION.md teaches host
+  ownership, backpressure, Close and H1/H2/H3 handoff.
+- Public module POD was revised with actual SYNOPSIS examples and methods.
+- examples/handshake-memory.pl adds a runnable opening-handshake example,
+  and the existing memory-attached and memory-manual examples remain.
+- t/01-versions.t checks public version consistency; t/00-load.t no
+  longer pins an obsolete fixed version.
+- MANIFEST ships the new example and test. CI smoke-runs all examples,
+  performs distcheck/disttest and tests optional HTTP1/2 plus live H3.
+- The previous feature-branch normal CI and full Autobahn client/server
+  suite passed. Recheck CI against the final 0.02 main SHA before release.
+- handoff.md, author-only xt/, and repository-only bench/ remain excluded
+  from the CPAN MANIFEST.
+- No other Unblock or Linux::Event repositories were changed.
+
+### Remaining before release
+
+Confirm green Linux 5.16/latest, macOS and Windows tests, POD,
+distcheck/disttest, and all three example smoke tests on the final main
+commit. Confirm full Autobahn conformance for the version-bumped main
+commit. Tag and publish only upon explicit user approval.
+
+### Historical notes below
+
+The rest of this handoff records earlier development decisions and
+snapshots. Historical branch and release-readiness instructions below
+do not supersede the current 0.02 status.
+
 
 ## Repository
 
 Repository: haxmeister/perl-Unblock-WebSocket
 
-Development branches:
-
-- feature/permessage-deflate - portable compression baseline
-- feature/native-compression - native RSV1/framing candidate
-
-Main currently contains the initial portable protocol core. Native backend work
-is being developed and tested on feature/native-core before it is merged.
+The original experimental branches below are historical. Their changes
+were incorporated into the 0.01 release or superseded by main. The new
+attached-transport branch has been merged by PR #1.
 
 Do not modify Linux::Event::WebSocket or other repositories from this project
 unless explicitly authorized. They may be read as reference material.
@@ -492,9 +524,9 @@ hardware performance claims. They confirm that restoring bq framing/masking
 provides a meaningful gain without introducing a second compression
 implementation.
 
-## Release status
+## Historical 0.01 release status
 
-Version 0.01 is release-ready on main.
+Version 0.01 was release-ready on main.
 
 The hardened native protocol checkpoint passed the complete 517-case Autobahn
 suite in both client and server directions:
@@ -518,20 +550,20 @@ packaging, dependency, manifest, or conformance blocker.
 
 The release candidate has been fast-forwarded to main.
 
-Next release action:
+Historical 0.01 release actions (completed, not current instructions):
 
 1. tag version 0.01;
 2. create the GitHub release;
 3. upload Unblock-WebSocket-0.01 to CPAN.
 
 
-## API modernization feature branch (2026-10-11)
+## Historical API modernization feature branch (merged 2026-10-12)
 
 Branch: feature/attached-transport-http-handoff
 Base main commit: 5c63c682c318be4cbfadeb11e207ad67eaaed4ac
 
 Scope: WebSocket repository only. No changes to HTTP1, HTTP2, HTTP3,
-Uniform::HTTP, or unified Unblock::HTTP. Main remains unchanged. Native
+Uniform::HTTP, or unified Unblock::HTTP. At that time main was unchanged. Native
 ABI/include/unblock_websocket_native.h and the vendored protocol engine are
 unchanged.
 
@@ -578,10 +610,10 @@ Verification checkpoint:
   microbenchmark. Native ABI is unmodified.
 - Compare against main reports branch strictly ahead, no deleted files,
   no upstream changes. Entire changed set is in WebSocket repository only.
-- The existing Autobahn conformance workflow was still running at this
-  checkpoint. Do not claim a new complete result until it finishes.
+- The Autobahn conformance workflow was still running at this checkpoint.
+  It subsequently finished successfully in both client and server jobs.
 
-Before merge/release:
+Historical pre-merge checklist (completed):
 
 1. Confirm the newest feature commit passes required HTTP3 CI,
    four-platform tests, POD, distcheck/disttest and examples.
