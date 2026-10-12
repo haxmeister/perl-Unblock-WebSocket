@@ -1,186 +1,304 @@
-# Transport integration
+# Connecting Unblock::WebSocket to a transport
 
-Unblock::WebSocket is an established WebSocket protocol engine. The caller
-performs HTTP handshake validation before creating Client or Server. The
-WebSocket object does not own sockets, TLS, timers, event loops, or HTTP.
+This guide is for someone writing an adapter between Unblock::WebSocket
+and a socket, event framework, or streaming HTTP transaction.
 
-There are two output modes. Choose one per WebSocket object.
+If you only want to learn how to send and receive messages, start with
+[the README](../README.md) and
+[examples/handshake-memory.pl](../examples/handshake-memory.pl).
 
-## Attached output (recommended for ordinary host integrations)
+## The two parts of a connection
+
+There are two objects with different jobs:
+
+- **The WebSocket object** (`$ws`) understands WebSocket messages,
+  frames, masking, Ping/Pong and Close.
+- **The transport** (`$host`) owns the connection, reads and writes
+  bytes, handles TLS, and decides when to stop the connection.
+
+The WebSocket object does **not** create a socket or run an event loop.
+
+The opening HTTP handshake happens before an ordinary WebSocket
+Client or Server object is used. Once the handshake is accepted, the
+transport delivers only WebSocket bytes to `$ws->input($bytes)`.
+
+## Pick one output mode
+
+There are two ways to get outgoing bytes from Unblock::WebSocket.
+
+**Attached output** is convenient for framework adapters: the
+WebSocket object calls methods on the host whenever output is ready.
+This works for messages sent later from callbacks too.
+
+**Manual output** is simpler for an application that already moves
+byte buffers itself: the caller asks for output and writes it.
+
+Do not use both modes for one WebSocket connection.
+
+## Attached output
+
+Create your WebSocket with `transport => $host`:
+
+    use Unblock::WebSocket::Server;
 
     my $ws = Unblock::WebSocket::Server->new(
-        transport => $stream,
+        transport => $host,
         on_message => sub {
             my ($ws, $message, $type) = @_;
             $ws->send_text("echo:$message");
         },
     );
 
-The host stream implements three methods:
+Then, whenever the host receives data:
+
+    $ws->input($bytes);
+
+The host must provide **exactly these three transport operations**:
 
     unblock_send($bytes)
     unblock_finish()
     unblock_abort($reason)
 
-The host still feeds input:
+The names are deliberately separate from ordinary framework method names
+such as `write()` or `close()`. An adapter maps these three methods to
+the framework's own operations.
 
-    $ws->input($bytes);
-    $ws->input_eof;               # clean read-side EOF
-    $ws->transport_error($reason); # broken socket or TLS transport
+### What each host method means
 
-It never calls output() in attached mode. Output from send_text(),
-send_binary(), ping(), Close frames, automatic Pong, errors and later
-application callbacks is handed to unblock_send() automatically.
+`unblock_send($bytes)` queues the complete byte string to be written
+in order. The bytes are already framed as WebSocket traffic; do not frame
+them again.
 
-### Whole-buffer ownership
+- Return true if you accepted every byte and can accept more now.
+- Return undef if you accepted every byte and do not report congestion.
+- Return a defined false value if you accepted every byte but your
+  output queue is now full.
+- Throw an exception if you could not accept the entire buffer.
 
-unblock_send() must accept every byte of the given buffer into its own
-ordered write queue or throw an exception. Socket writes can be partial
-internally, but the host retains any unwritten bytes.
+**Even when it returns false, every byte must already be owned by the
+host.** Do not return false to mean a partial write. If the underlying
+socket only writes part of a buffer, the host must keep the rest.
 
-A true return means accepted and able to take more. An undefined return means
-accepted, with no backpressure information. A defined false return means
-accepted completely, but the host is now congested.
-
-The engine will not call unblock_send() again until:
+If the host returns false, the WebSocket object holds back any further
+output until the host calls:
 
     $ws->resume_output;
 
-The host calls that when its own queue can accept more. Bytes already accepted
-are never replayed. Exceptions cause immediate transport abort.
+Call it after the host queue has room. This does not resend bytes the
+host already accepted.
 
-The attached transport is held weakly. The framework must keep it alive as
-long as the established connection needs to operate.
+`unblock_finish()` says a normal WebSocket Close exchange has finished
+and all protocol bytes have been handed to the host. The host must
+flush its own pending writes before closing the network connection.
 
-Do not call input(), output(), or resume_output() recursively from
-unblock_send(). Do not send new WebSocket messages from unblock_send().
-Application callbacks may send normally. The engine avoids recursively
-entering the host's write method while delivering those callbacks.
+`unblock_abort($reason)` says the connection failed. Stop the
+transport and dispose of its pending work as appropriate. It is not
+a normal WebSocket Close frame.
 
-### Producer backpressure
+### A small host example
 
-send_text(), send_binary(), and ping() accept the message even when their
-return value is false. False means the producer should stop sending new
-messages until on_drain runs.
+For a runnable version, see
+[examples/memory-attached.pl](../examples/memory-attached.pl).
 
-There are two different reasons:
+The essential method contract looks like this:
 
-- the WebSocket output queue reached high_water, or
-- the host returned false from unblock_send().
+    package Example::Host;
 
-on_drain is a producer notification, not a socket-writable event. It runs
-after host congestion clears (resume_output()) and the protocol queue is at
-or below low_water. The host must manage its socket's write readiness itself.
+    sub unblock_send {
+        my ($self, $bytes) = @_;
+        push @{ $self->{pending_output} }, $bytes;
+        return; # Every byte accepted; no congestion signal.
+    }
 
-### Close handling
+    sub unblock_finish {
+        my ($self) = @_;
+        $self->{finish_when_queue_drains} = 1;
+        return;
+    }
 
-close() queues a WebSocket Close frame and begins the protocol handshake.
-It does NOT immediately close the host. The peer's Close reply must arrive
-before a normal finish (or the host may impose its own timeout and call
-abort()).
+    sub unblock_abort {
+        my ($self, $reason) = @_;
+        $self->{error} = $reason;
+        return;
+    }
 
-After the peer Close is received, unblock_finish() is called once the
-WebSocket engine has handed all pending output to the host. The host must
-drain its own queue before shutting down the transport. If the host is
-congested, resume_output() is still required.
+The example deliberately omits real network code. Your framework must
+actually write and drain `pending_output` and honor
+`finish_when_queue_drains`. It must also keep the host alive because
+Unblock::WebSocket holds only a weak reference to it.
 
-transport_error() is an immediate failure and calls unblock_abort() once.
-Unexpected EOF before a peer Close is also abnormal in attached mode and
-aborts. Both paths report on_error and, if no Close was received, on_close
-with an undefined code and an explanatory reason.
+### Receiving bytes, EOF and errors
 
-## Manual output (unchanged)
-
-Without transport => ..., the existing low-level API remains available:
+When the host receives WebSocket bytes:
 
     $ws->input($bytes);
-    while ($ws->want_write) {
-        $host->write($ws->output);
-    }
+
+When the read side reaches EOF:
 
     $ws->input_eof;
 
-output($maximum), output_size(), want_read(), want_write(), and want_end()
-retain their manual-mode meanings. The native backend and borrowed-buffer
-native ABI remain separate and unchanged.
+When the socket, TLS connection or streaming transport fails:
 
-Calling output() when attached is an error; manual code must not compete
-with unblock_send() for ownership of the same bytes.
+    $ws->transport_error($reason);
 
-## HTTP/1.1 Upgrade
+Unexpected EOF before a WebSocket Close frame is an abnormal shutdown.
+In attached mode this calls `unblock_abort()`. Do not confuse
+transport EOF with a valid WebSocket Close handshake.
 
-Use Unblock::WebSocket::Handshake to validate the Uniform::HTTP request and
-construct the 101 response.
+### Who handles backpressure?
 
-With a current Unblock::HTTP1 Server, the on_switch callback occurs after
-the attached HTTP host has accepted the 101 response bytes. The HTTP1 engine
-stops parsing HTTP, and take_remainder() returns the exact bytes already
-received beyond the handshake. Feed that remainder into the new WebSocket
-engine; never feed it back to HTTP.
+There are **two different queues**:
 
-Use the SAME ordered host write queue after switching. The 101 response must
-remain ahead of all WebSocket frames. The original HTTP connection becomes
-the WebSocket connection.
+1. The WebSocket engine may have output buffered.
+2. Your host may have bytes waiting to be written to the network.
 
-The optional real engine regression is t/35-http1-handoff.t. It sends a
-WebSocket frame immediately after the HTTP request in the same input buffer.
+When the host returns false from `unblock_send()`, it must call
+`resume_output()` once it can accept more.
 
-## HTTP/2 Extended CONNECT
+Separately, `send_text()`, `send_binary()` and `ping()` can return
+false even though the message was accepted. That is a signal to the
+**application producer** to pause until `on_drain` fires.
 
-An HTTP/2 WebSocket is one streaming HTTP/2 Transaction, not the entire
-HTTP/2 connection. The peer must advertise enable_connect_protocol.
+    my $ws = Unblock::WebSocket::Server->new(
+        transport => $host,
+        on_drain => sub {
+            my ($ws) = @_;
+            # Application can produce more messages.
+        },
+    );
 
-The WebSocket Handshake makes a CONNECT request with protocol => 'websocket'.
-The successful response has status 200. Use stream_body => 1 on the
-request and response. Each HTTP/2 DATA body chunk becomes a call to
-WebSocket input(). Send outgoing WebSocket bytes through Transaction->write()
-and finish that particular body with Transaction->end() after WebSocket Close.
+`on_drain` does not replace the host's socket-writable event.
 
-An HTTP2 transaction-body adapter can implement the three unblock_*
-operations. If it is called from an HTTP/2 parser callback, queue WebSocket
-output for transfer after that callback returns. Do not recursively drive
-nghttp2 from its own callback. The rest of the HTTP/2 connection remains
-usable for other transactions.
+Do not call `input()` or `resume_output()` recursively while the
+engine is inside `unblock_send()`, and do not start more WebSocket sends
+from that host method. Sending from `on_message` is supported.
 
-The optional real engine regression is t/36-http2-handoff.t.
+### Closing
 
-## HTTP/3 Extended CONNECT
+    $ws->close(code => 1000, reason => 'done');
 
-An HTTP/3 WebSocket likewise occupies only one QUIC bidirectional stream.
-Use a client and server with enable_extended_connect as appropriate and
-check the peer's corresponding setting. Successful Extended CONNECT uses a
-200 response, with a streaming request and response body.
+This queues a WebSocket Close frame. The peer should answer with its own
+Close frame. Only after that exchange and after the engine has passed
+outgoing bytes to the host does it call `unblock_finish()`.
 
-The QUIC driver retains ownership of UDP, TLS 1.3, stream flow control, and
-timers. Transfer each body chunk to WebSocket input(). Transfer WebSocket
-output to the relevant HTTP3 Transaction->write(), not to the whole QUIC
-connection. A Close handshake ends that transaction's body, not other QUIC
-streams.
+Your host must still drain its own write queue. A host may use its own
+timeout if a peer never completes the Close handshake, and then abort.
 
-An H3 body adapter must translate stream congestion into a false
-unblock_send() result only AFTER complete buffer acceptance and arrange
-resume_output() from its write-resumption signal. If a transaction cannot
-accept the whole buffer at once, the adapter must queue it itself before
-reporting acceptance.
+## Manual output
 
-The Handshake class validates the H3 opening form, but a live H3/QUIC
-end-to-end test requires a real Net::QUIC connection, driver and TLS
-certificate fixtures; it is not implied by the handshake unit tests.
+If there is no `transport => $host`, use this API:
 
-No Unblock::HTTP1, ::HTTP2, ::HTTP3 or Net::QUIC distribution is a mandatory
-WebSocket runtime dependency. Integration regressions run when their optional
-engines are installed.
+    use Unblock::WebSocket::Server;
 
-## Runnable examples
+    my $ws = Unblock::WebSocket::Server->new(
+        on_message => sub {
+            my ($ws, $message, $type) = @_;
+            $ws->send_text("echo:$message");
+        },
+    );
 
-examples/memory-attached.pl shows a host with all three unblock_* methods,
-with transport-integration code separate from application callbacks.
-examples/memory-manual.pl uses the unchanged want_write()/output() loop.
-Both programs run without an event framework, socket or HTTP engine.
-The examples assume the opening HTTP handshake was already completed.
+    # Read bytes from your network transport.
+    $ws->input($bytes);
 
-## Further reading
+    # Put every generated buffer on your transport write queue.
+    while ($ws->want_write) {
+        my $out = $ws->output;
+        $host->write($out);
+    }
 
-See the public POD for Client, Server, Handshake and the main
-Unblock::WebSocket module. The repository also contains test/bench tools and
-docs/ARCHITECTURE.md.
+Here `$host->write()` stands for whatever ordered write-queue API your
+framework provides. The example is not tied to a specific framework.
+
+Other useful manual-mode methods are `output_size()`,
+`output($maximum)`, `want_read()` and `want_end()`.
+`output()` cannot be called in attached mode.
+
+See [examples/memory-manual.pl](../examples/memory-manual.pl)
+for the complete memory-only example.
+
+## How to switch from HTTP to WebSocket
+
+WebSocket begins as an HTTP request. The transport must complete
+the opening handshake before delivering WebSocket bytes to the engine.
+Use `Unblock::WebSocket::Handshake` to create and validate the
+`Uniform::HTTP` messages.
+
+The HTTP version changes **which connection carries the WebSocket bytes**.
+
+### HTTP/1.1: upgrade the whole connection
+
+1. Client sends an HTTP GET request with Upgrade headers.
+2. Server validates it with `Handshake->server_accept($request)`.
+3. Server sends `$handshake->server_response` (HTTP 101).
+4. After the HTTP implementation switches protocols, create
+   `Unblock::WebSocket::Server` and feed it the remaining bytes.
+
+When using Unblock::HTTP1, `on_switch` is called after the attached
+HTTP host has accepted the 101 response. Call `take_remainder()` on
+the HTTP engine and feed those exact bytes to the WebSocket object.
+A client may send its first WebSocket frame in the same network
+buffer as the HTTP request. Do not discard that remainder or
+send it through HTTP again.
+
+Keep the **same ordered host write queue** so the HTTP 101 response is
+sent before any WebSocket frames. The socket now belongs to WebSocket,
+not HTTP.
+
+The full regression is `t/35-http1-handoff.t`.
+
+### HTTP/2: use one streaming transaction
+
+HTTP/2 keeps the whole network connection available for multiple
+transactions. A WebSocket occupies **one** streaming transaction.
+
+- Both sides must support HTTP/2 Extended CONNECT; the peer advertises
+  `enable_connect_protocol`.
+- The handshake creates CONNECT with `:protocol = websocket`.
+- The successful response is HTTP 200, not 101.
+- Use `stream_body => 1` on the request and response.
+- Feed that transaction's incoming DATA chunks to `$ws->input($bytes)`.
+- Write WebSocket output with that transaction's `write($bytes)` and
+  finish its body with `end()` after the Close handshake.
+
+The body adapter can supply the same three `unblock_*` methods.
+When an HTTP/2 parser callback calls into WebSocket, queue outgoing
+WebSocket bytes and flush them **after** the parser callback returns.
+Do not call back into the HTTP/2 engine recursively from its own
+callbacks.
+
+Other transactions on the HTTP/2 connection continue normally.
+The full regression is `t/36-http2-handoff.t`.
+
+### HTTP/3: use one QUIC stream
+
+HTTP/3 follows the same basic pattern as HTTP/2: Extended CONNECT,
+a successful HTTP 200 response and a streaming transaction body.
+
+- Enable and check HTTP/3 Extended CONNECT support.
+- Feed that transaction's body chunks to `$ws->input($bytes)`.
+- Send the WebSocket output to that HTTP/3 transaction, not to the
+  whole QUIC connection.
+- Finish the transaction body after a normal WebSocket Close exchange.
+
+The QUIC driver still owns UDP, TLS 1.3, stream flow control and timers.
+An HTTP/3 adapter must queue the **whole** buffer before claiming
+acceptance, even if the QUIC stream is temporarily unable to write.
+Use `resume_output()` after congestion clears.
+
+The live QUIC/TLS regression is `xt/http3-handoff.t`.
+
+## Optional dependencies
+
+Unblock::WebSocket does **not** require Unblock::HTTP1, HTTP2, HTTP3 or
+Net::QUIC to run. Those libraries are integration choices; the
+corresponding tests use them when installed.
+
+The native adapter ABI is separate from the Perl-level attached and
+manual interfaces. XS adapters needing the lowest overhead can use
+the private versioned C header instead of moving every byte through
+Perl.
+
+For API details, read `perldoc Unblock::WebSocket`,
+`perldoc Unblock::WebSocket::Handshake`,
+`perldoc Unblock::WebSocket::Client` and
+`perldoc Unblock::WebSocket::Server`.
