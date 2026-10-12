@@ -63,6 +63,15 @@ jobs:
           perl Makefile.PL
           perl -MConfig -e 'system($Config{make}, "test"); exit($? >> 8)'
 
+      - name: Test optional HTTP1 and HTTP2 handoffs
+        if: matrix.os == 'ubuntu-latest' && matrix.perl == 'latest'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libnghttp2-dev pkg-config
+          cpanm --notest Unblock::HTTP1 Unblock::HTTP2
+          prove -b t/35-http1-handoff.t t/36-http2-handoff.t
+
       - name: Check POD syntax
         if: runner.os != 'Windows'
         shell: bash
